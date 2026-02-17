@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>달고나 뽑기</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #3B2510;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; font-family: 'Jua', 'Noto Sans KR', sans-serif;
+    overflow: hidden;
+    background-image:
+      radial-gradient(ellipse at 30% 20%, rgba(90,60,30,0.5) 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 80%, rgba(60,35,15,0.4) 0%, transparent 60%);
+  }
+  #game-wrapper {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    position: relative;
+  }
+  #title-bar {
+    color: #F0D090; font-size: 28px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    letter-spacing: 4px;
+  }
+  #hud {
+    display: flex; gap: 32px; align-items: center;
+    color: #E8C87A; font-size: 18px;
+  }
+  #hud .hud-item {
+    background: rgba(60,35,15,0.7); border: 2px solid #8B6914;
+    border-radius: 12px; padding: 6px 18px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #hud .hud-item.warning { border-color: #C0392B; color: #E74C3C; animation: pulse 0.5s infinite alternate; }
+  @keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
+  #canvas-container {
+    position: relative;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.1);
+    background: #4A2E14;
+    padding: 20px;
+  }
+  canvas {
+    display: block; border-radius: 8px;
+    cursor: none;
+  }
+  #overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    background: rgba(30,15,5,0.85); border-radius: 16px;
+    z-index: 10; transition: opacity 0.4s;
+  }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+  #overlay h1 { color: #F0D090; font-size: 36px; margin-bottom: 8px; letter-spacing: 3px; }
+  #overlay h2 { color: #E8C87A; font-size: 22px; margin-bottom: 24px; font-weight: normal; }
+  #overlay p { color: #C8A870; font-size: 15px; margin-bottom: 20px; max-width: 380px; text-align: center; line-height: 1.6; }
+  .btn {
+    background: linear-gradient(135deg, #D4952B, #B87D20);
+    color: #FFF8E8; border: none; padding: 12px 32px; font-size: 18px;
+    border-radius: 10px; cursor: pointer; font-family: 'Jua', sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: transform 0.15s, box-shadow 0.15s;
+    margin: 6px;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+  .btn:active { transform: translateY(1px); }
+  .btn-small { padding: 8px 20px; font-size: 15px; }
+  .shape-selector {
+    display: flex; gap: 12px; margin: 16px 0;
+  }
+  .shape-btn {
+    width: 80px; height: 80px; background: rgba(212,149,43,0.15);
+    border: 2px solid #8B6914; border-radius: 12px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: all 0.2s; color: #E8C87A; font-size: 13px; gap: 4px;
+  }
+  .shape-btn:hover, .shape-btn.selected { background: rgba(212,149,43,0.35); border-color: #D4952B; transform: scale(1.05); }
+  .shape-btn svg { width: 36px; height: 36px; fill: #E8C87A; }
+  .result-text { font-size: 48px; margin-bottom: 12px; }
+  #progress-container {
+    width: 200px; height: 8px; background: rgba(60,35,15,0.7);
+    border-radius: 4px; overflow: hidden; border: 1px solid #8B6914;
+  }
+  #progress-bar {
+    height: 100%; background: linear-gradient(90deg, #D4952B, #E8B84B);
+    transition: width 0.2s; width: 0%;
+  }
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+  <div id="title-bar">달 고 나 뽑 기</div>
+  <div id="hud">
+    <div class="hud-item" id="timer-display">⏱ <span id="timer">60</span>초</div>
+    <div class="hud-item">진행률 <div id="progress-container"><div id="progress-bar"></div></div></div>
+    <div class="hud-item" id="integrity-display">💛 모양 상태: <span id="integrity">100</span>%</div>
+  </div>
+  <div id="canvas-container">
+    <canvas id="gameCanvas" width="504" height="504"></canvas>
+    <div id="overlay">
+      <div id="menu-screen">
+        <h1>🍬 달고나 뽑기</h1>
+        <h2>모양을 골라 뽑아내세요!</h2>
+        <p>윤곽선을 따라 클릭하여 달고나를 깨세요. 윤곽선은 한 번, 그 외 부분은 여러 번 클릭해야 합니다. 모양 내부를 깨뜨리면 실패!</p>
+        <div class="shape-selector" id="shape-selector"></div>
+        <div style="display:flex; gap:8px; margin-top: 8px;">
+          <button class="btn" id="start-btn">시작하기</button>
+        </div>
+      </div>
+      <div id="result-screen" style="display:none;">
+        <div class="result-text" id="result-emoji"></div>
+        <h1 id="result-title"></h1>
+        <h2 id="result-subtitle"></h2>
+        <button class="btn" id="retry-btn">다시 하기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Configuration
+// ============================================================
+const GRID = 84;
+const CELL = 6;
+const CANVAS_SIZE = GRID * CELL;
+const CENTER = GRID / 2;
+const COOKIE_RADIUS = 38;
+const OUTLINE_THICKNESS = 2.5;
+const TIME_LIMIT = 75;
+
+const COLORS = {
+  table: '#4A2E14',
+  candy: '#D4952B',
+  candyLight: '#DCAB45',
+  candyDark: '#B87D20',
+  outline: '#C89030',
+  outlineMark: '#BF8525',
+  crack1: '#A07018',
+  crack2: '#8B6010',
+  broken: '#3E2510',
+  pin: '#C0C0C8',
+  pinTip: '#E8E8EE',
+};
+
+// ============================================================
+// Audio (Web Audio API - simple procedural sounds)
+// ============================================================
+let audioCtx;
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playSound(freq, dur, type='sine', vol=0.12) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + dur);
+}
+function soundClick() { playSound(800 + Math.random()*400, 0.08, 'square', 0.06); }
+function soundBreak() { playSound(200 + Math.random()*100, 0.15, 'sawtooth', 0.08); }
+function soundCrack() { playSound(150 + Math.random()*80, 0.25, 'sawtooth', 0.05); }
+function soundWin() {
+  [523,659,784,1047].forEach((f,i) => setTimeout(() => playSound(f, 0.3, 'sine', 0.1), i*120));
+}
+function soundLose() {
+  [400,300,200].forEach((f,i) => setTimeout(() => playSound(f, 0.4, 'sawtooth', 0.08), i*200));
+}
+
+// ============================================================
+// Shape Definitions (Signed Distance Functions)
+// ============================================================
+const SHAPES = {
+  star: {
+    name: '별',
+    icon: '⭐',
+    sdf(x, y) {
+      const dx = x - CENTER, dy = y - CENTER;
+      const angle = Math.atan2(dy, dx);
+      const r = Math.sqrt(dx*dx + dy*dy);
+      const outerR = 22, innerR = 10;
+      const n = 5;
+      const a = Math.PI / n;
+      const sector = Math.abs(((angle + Math.PI * 2.5) % (2*a)) - a);
+      const cosA = Math.cos(a), sinA = Math.sin(a);
+      const targetR = outerR * innerR / (innerR + (outerR - innerR) * Math.abs(Math.cos(sector * n / 2)));
+      // Approximate SDF using polar distance
+      const starAngle = ((angle + Math.PI*2.5) % (2*a)) - a;
+      const tip = outerR;
+      const valley = innerR;
+      const blend = 0.5 + 0.5 * Math.cos(sector * n);
+      const shapeR = valley + (tip - valley) * Math.pow(Math.abs(Math.cos(n * angle / 2)), 0.6);
+      return r - shapeR;
+    }
+  },
+  heart: {
+    name: '하트',
+    icon: '❤️',
+    sdf(x, y) {
+      let dx = (x - CENTER) / 20;
+      let dy = (y - CENTER + 4) / 20;
+      dy = -dy; // flip
+      const a = dx*dx + dy*dy - 1;
+      return (a*a*a - dx*dx*dy*dy*dy) * 12;
+    }
+  },
+  circle: {
+    name: '원',
+    icon: '⭕',
+    sdf(x, y) {
+      const dx = x - CENTER, dy = y - CENTER;
+      return Math.sqrt(dx*dx + dy*dy) - 20;
+    }
+  },
+  umbrella: {
+    name: '우산',
+    icon: '☂️',
+    sdf(x, y) {
+      const dx = x - CENTER, dy = y - CENTER;
+      // Top dome
+      const domeR = 22;
+      const domeY = -3;
+      const domeDist = Math.sqrt(dx*dx + (dy-domeY)*(dy-domeY)) - domeR;
+      // Only upper half of dome
+      if (dy - domeY < 0) {
+        // Handle (thin rectangle)
+        const handleW = 2.2;
+        const handleTop = domeY;
+        const handleBot = 24;
+        const hookR = 5;
+        // Straight handle
+        if (dy >= handleTop && dy <= handleBot && Math.abs(dx) <= handleW) {
+          return -1; // inside
+        }
+        // Hook at bottom
+        const hookCx = hookR;
+        const hookCy = handleBot;
+        const hookDist = Math.sqrt((dx - hookCx)*(dx - hookCx) + (dy - hookCy)*(dy - hookCy));
+        if (dy >= handleBot && hookDist <= hookR + handleW && hookDist >= hookR - handleW && dx >= 0) {
+          return -1;
+        }
+        // Handle SDF approximation
+        if (Math.abs(dx) <= handleW + 3 && dy >= handleTop && dy <= handleBot + hookR + handleW + 2) {
+          const dHandle = Math.abs(dx) - handleW;
+          if (dy <= handleBot) return dHandle;
+          const hd = Math.abs(hookDist - hookR) - handleW;
+          return Math.min(dHandle + 2, dx >= 0 ? hd : 10);
+        }
+        return 10; // far from shape
+      }
+      return domeDist;
+    }
+  },
+  triangle: {
+    name: '삼각형',
+    icon: '🔺',
+    sdf(x, y) {
+      const dx = x - CENTER, dy = (y - CENTER + 2);
+      const size = 24;
+      // Equilateral triangle SDF
+      const k = Math.sqrt(3);
+      let px = Math.abs(dx) - size;
+      let py = dy + size / k;
+      if (px + k * py > 0) {
+        const nx = (px - k * py) / 2;
+        const ny = (-k * px - py) / 2;
+        px = nx; py = ny;
+      }
+      px = Math.max(px, -(size * 2));
+      return -py - size * k / 3 > 0 ? -Math.sqrt(px*px+py*py)*Math.sign(py) : (py + size*k/3);
+    }
+  }
+};
+
+// Better triangle SDF
+SHAPES.triangle.sdf = function(x, y) {
+  const dx = x - CENTER;
+  const dy = y - CENTER + 4;
+  const R = 23;
+  // Check if inside equilateral triangle
+  const h = R * Math.sqrt(3) / 2;
+  // Vertices: top (0, -R), bottom-left (-h, R/2), bottom-right (h, R/2)
+  // Use half-plane tests
+  const topY = -R * 0.75;
+  const botY = R * 0.65;
+  const midY = (topY + botY) / 2;
+  const halfW = (botY - dy) / (botY - topY) * R * 0.9;
+  if (dy >= topY && dy <= botY && Math.abs(dx) <= halfW) {
+    const distTop = dy - topY;
+    const distBot = botY - dy;
+    const distSide = halfW - Math.abs(dx);
+    return -Math.min(distTop, distBot, distSide);
+  }
+  // Outside: approximate distance
+  if (dy < topY) return Math.sqrt(dx*dx + (dy-topY)*(dy-topY));
+  if (dy > botY) return Math.sqrt(dx*dx + (dy-botY)*(dy-botY));
+  return Math.abs(dx) - halfW;
+};
+
+// ============================================================
+// Game State
+// ============================================================
+let grid = []; // grid[y][x] = { hp, maxHp, type, crackLevel, broken, inCookie }
+let selectedShape = 'star';
+let gameState = 'menu'; // menu, playing, win, lose
+let timeLeft = TIME_LIMIT;
+let timerInterval = null;
+let particles = [];
+let mouseX = 0, mouseY = 0;
+let shakeX = 0, shakeY = 0;
+let totalOutlineCells = 0;
+let brokenOutlineCells = 0;
+let totalInsideCells = 0;
+let brokenInsideCells = 0;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = CANVAS_SIZE;
+canvas.height = CANVAS_SIZE;
+
+// ============================================================
+// Grid Initialization
+// ============================================================
+function initGrid(shapeName) {
+  grid = [];
+  totalOutlineCells = 0;
+  brokenOutlineCells = 0;
+  totalInsideCells = 0;
+  brokenInsideCells = 0;
+  
+  const shape = SHAPES[shapeName];
+  
+  for (let y = 0; y < GRID; y++) {
+    grid[y] = [];
+    for (let x = 0; x < GRID; x++) {
+      const dx = x - CENTER, dy = y - CENTER;
+      const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+      const inCookie = distFromCenter <= COOKIE_RADIUS;
+      
+      let type = 0; // 0=outside shape, 1=outline, 2=inside shape
+      let hp = 3;
+      
+      if (inCookie) {
+        const sdfVal = shape.sdf(x, y);
+        if (sdfVal < -OUTLINE_THICKNESS) {
+          type = 2; // inside
+          hp = 3;
+          totalInsideCells++;
+        } else if (sdfVal <= OUTLINE_THICKNESS * 0.5) {
+          type = 1; // outline
+          hp = 1;
+          totalOutlineCells++;
+        } else {
+          type = 0; // outside (but in cookie)
+          hp = 3;
+        }
+      }
+      
+      grid[y][x] = {
+        hp, maxHp: hp, type, crackLevel: 0,
+        broken: false, inCookie,
+        noiseVal: Math.random() * 0.15 // texture variation
+      };
+    }
+  }
+  
+  // Add subtle texture noise to hp for outer areas (some cells are 2hp instead of 3)
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const cell = grid[y][x];
+      if (cell.inCookie && cell.type === 0 && Math.random() < 0.3) {
+        cell.hp = 2;
+        cell.maxHp = 2;
+      }
+    }
+  }
+}
+
+// ============================================================
+// Crack Propagation Algorithm
+// ============================================================
+function applyClick(gx, gy) {
+  if (gx < 0 || gx >= GRID || gy < 0 || gy >= GRID) return;
+  const cell = grid[gy][gx];
+  if (!cell.inCookie || cell.broken) return;
+  
+  soundClick();
+  cell.hp--;
+  cell.crackLevel++;
+  
+  if (cell.hp <= 0) {
+    breakCell(gx, gy);
+    propagateCracks(gx, gy, 0.45);
+  } else {
+    // Minor crack propagation even without breaking
+    propagateCracks(gx, gy, 0.15);
+    spawnParticles(gx * CELL + CELL/2, gy * CELL + CELL/2, 3, '#B87D20');
+  }
+  
+  checkGameState();
+}
+
+function breakCell(x, y) {
+  const cell = grid[y][x];
+  if (cell.broken) return;
+  cell.broken = true;
+  cell.hp = 0;
+  
+  if (cell.type === 1) brokenOutlineCells++;
+  if (cell.type === 2) brokenInsideCells++;
+  
+  soundBreak();
+  spawnParticles(x * CELL + CELL/2, y * CELL + CELL/2, 8, '#D4952B');
+  
+  // Screen shake
+  const intensity = cell.type === 1 ? 1 : 2;
+  shakeX += (Math.random() - 0.5) * intensity * 2;
+  shakeY += (Math.random() - 0.5) * intensity * 2;
+}
+
+function propagateCracks(startX, startY, baseIntensity) {
+  const visited = new Set();
+  const queue = [{x: startX, y: startY, intensity: baseIntensity, gen: 0}];
+  visited.add(`${startX},${startY}`);
+  
+  const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  
+  while (queue.length > 0) {
+    const {x, y, intensity, gen} = queue.shift();
+    if (gen > 12) continue; // max propagation depth
+    
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx, ny = y + dy;
+      const key = `${nx},${ny}`;
+      if (nx < 0 || nx >= GRID || ny < 0 || ny >= GRID) continue;
+      if (visited.has(key)) continue;
+      
+      const neighbor = grid[ny][nx];
+      if (!neighbor.inCookie || neighbor.broken) continue;
+      
+      // Outline cells propagate cracks more easily
+      const resistance = neighbor.type === 1 ? 0.85 : 0.45;
+      // Diagonal is weaker
+      const diagFactor = (dx !== 0 && dy !== 0) ? 0.7 : 1.0;
+      const prob = intensity * resistance * diagFactor;
+      
+      if (Math.random() < prob) {
+        visited.add(key);
+        neighbor.hp--;
+        neighbor.crackLevel++;
+        
+        if (neighbor.hp <= 0) {
+          breakCell(nx, ny);
+          // Continue propagation from broken cell with reduced intensity
+          queue.push({x: nx, y: ny, intensity: intensity * 0.35, gen: gen + 1});
+        } else {
+          // Crack appeared but cell didn't break
+          // Small chance to continue propagating cracks
+          if (Math.random() < 0.3) {
+            queue.push({x: nx, y: ny, intensity: intensity * 0.2, gen: gen + 1});
+          }
+        }
+      }
+    }
+  }
+}
+
+// ============================================================
+// Particle System
+// ============================================================
+function spawnParticles(px, py, count, color) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: px, y: py,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4 - 1,
+      life: 1.0,
+      decay: 0.02 + Math.random() * 0.03,
+      size: 2 + Math.random() * 3,
+      color
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.15; // gravity
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// ============================================================
+// Rendering
+// ============================================================
+// Pre-render candy texture pattern
+let candyPattern = null;
+function createCandyPattern() {
+  const pc = document.createElement('canvas');
+  pc.width = CANVAS_SIZE; pc.height = CANVAS_SIZE;
+  const pctx = pc.getContext('2d');
+  
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const cell = grid[y][x];
+      if (!cell.inCookie) continue;
+      
+      // Base candy color with noise
+      const n = cell.noiseVal;
+      const r = 212 + Math.floor(n * 30 - 15);
+      const g = 149 + Math.floor(n * 20 - 10);
+      const b = 43 + Math.floor(n * 15 - 7);
+      pctx.fillStyle = `rgb(${r},${g},${b})`;
+      
+      if (cell.type === 1) {
+        // Outline: slightly indented look
+        pctx.fillStyle = `rgb(${r-20},${g-15},${b-5})`;
+      }
+      
+      pctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+    }
+  }
+  
+  // Add subtle radial gradient for 3D cookie look
+  const grad = pctx.createRadialGradient(
+    CANVAS_SIZE/2 - 30, CANVAS_SIZE/2 - 30, 10,
+    CANVAS_SIZE/2, CANVAS_SIZE/2, COOKIE_RADIUS * CELL
+  );
+  grad.addColorStop(0, 'rgba(255,220,150,0.15)');
+  grad.addColorStop(0.5, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.15)');
+  pctx.fillStyle = grad;
+  pctx.beginPath();
+  pctx.arc(CANVAS_SIZE/2, CANVAS_SIZE/2, COOKIE_RADIUS * CELL, 0, Math.PI*2);
+  pctx.fill();
+  
+  candyPattern = pc;
+}
+
+function render() {
+  ctx.save();
+  
+  // Apply screen shake
+  shakeX *= 0.85;
+  shakeY *= 0.85;
+  ctx.translate(shakeX, shakeY);
+  
+  // Clear with table color
+  ctx.fillStyle = COLORS.table;
+  ctx.fillRect(-5, -5, CANVAS_SIZE + 10, CANVAS_SIZE + 10);
+  
+  // Draw wood grain texture lines
+  ctx.strokeStyle = 'rgba(80,50,20,0.3)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 20; i++) {
+    const yy = i * 28 + 5;
+    ctx.beginPath();
+    ctx.moveTo(0, yy);
+    for (let xx = 0; xx < CANVAS_SIZE; xx += 20) {
+      ctx.lineTo(xx, yy + Math.sin(xx * 0.02 + i) * 3);
+    }
+    ctx.stroke();
+  }
+  
+  // Cookie shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(CANVAS_SIZE/2 + 4, CANVAS_SIZE/2 + 6, COOKIE_RADIUS * CELL + 4, COOKIE_RADIUS * CELL + 2, 0, 0, Math.PI*2);
+  ctx.fill();
+  
+  // Draw candy base from pattern
+  if (candyPattern) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(CANVAS_SIZE/2, CANVAS_SIZE/2, COOKIE_RADIUS * CELL + 1, 0, Math.PI*2);
+    ctx.clip();
+    ctx.drawImage(candyPattern, 0, 0);
+    ctx.restore();
+  }
+  
+  // Cookie edge bevel
+  ctx.strokeStyle = 'rgba(180,130,50,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(CANVAS_SIZE/2, CANVAS_SIZE/2, COOKIE_RADIUS * CELL, 0, Math.PI*2);
+  ctx.stroke();
+  
+  // Draw outline markers (small dots to guide the player)
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const cell = grid[y][x];
+      if (!cell.inCookie || cell.broken) continue;
+      
+      if (cell.type === 1) {
+        // Draw outline guide - subtle dashed marks
+        const px = x * CELL, py = y * CELL;
+        ctx.fillStyle = 'rgba(160,100,20,0.45)';
+        ctx.fillRect(px, py, CELL, CELL);
+        // Small dot
+        ctx.fillStyle = 'rgba(120,80,15,0.4)';
+        ctx.beginPath();
+        ctx.arc(px + CELL/2, py + CELL/2, 1, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+  }
+  
+  // Draw cracks and broken cells
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const cell = grid[y][x];
+      if (!cell.inCookie) continue;
+      
+      const px = x * CELL, py = y * CELL;
+      
+      if (cell.broken) {
+        // Show hole - dark background visible
+        ctx.fillStyle = COLORS.broken;
+        ctx.fillRect(px, py, CELL, CELL);
+        // Slight inner shadow for depth
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(px, py, CELL, 1);
+        ctx.fillRect(px, py, 1, CELL);
+      } else if (cell.crackLevel > 0) {
+        // Draw crack lines
+        const alpha = Math.min(0.7, cell.crackLevel * 0.25);
+        ctx.fillStyle = `rgba(100,65,15,${alpha})`;
+        ctx.fillRect(px, py, CELL, CELL);
+        
+        // Crack line details
+        ctx.strokeStyle = `rgba(70,45,10,${alpha * 0.8})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        // Random crack line through cell
+        const seed = (x * 31 + y * 17) % 4;
+        if (seed === 0) { ctx.moveTo(px, py); ctx.lineTo(px+CELL, py+CELL); }
+        else if (seed === 1) { ctx.moveTo(px+CELL, py); ctx.lineTo(px, py+CELL); }
+        else if (seed === 2) { ctx.moveTo(px+CELL/2, py); ctx.lineTo(px+CELL/2, py+CELL); }
+        else { ctx.moveTo(px, py+CELL/2); ctx.lineTo(px+CELL, py+CELL/2); }
+        ctx.stroke();
+      }
+    }
+  }
+  
+  // Draw successfully extracted shape highlight
+  if (gameState === 'win') {
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        const cell = grid[y][x];
+        if (cell.type === 2 && !cell.broken && cell.inCookie) {
+          ctx.fillStyle = 'rgba(255,220,100,0.3)';
+          ctx.fillRect(x*CELL, y*CELL, CELL, CELL);
+        }
+      }
+    }
+  }
+  
+  // Particles
+  updateParticles();
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+  
+  // Custom cursor (pin/needle) - only during gameplay
+  if (gameState === 'playing') {
+    const cx = mouseX, cy = mouseY;
+    // Pin shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(cx + 2, cy + 2, 4, 2, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Pin body (thin needle)
+    ctx.strokeStyle = COLORS.pin;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx - 6, cy - 22);
+    ctx.stroke();
+    // Pin head
+    ctx.fillStyle = '#E04040';
+    ctx.beginPath();
+    ctx.arc(cx - 6, cy - 24, 4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#F06060';
+    ctx.beginPath();
+    ctx.arc(cx - 7, cy - 25, 1.5, 0, Math.PI*2);
+    ctx.fill();
+    // Pin tip highlight
+    ctx.fillStyle = COLORS.pinTip;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 1.5, 0, Math.PI*2);
+    ctx.fill();
+  }
+  
+  ctx.restore();
+  
+  if (gameState === 'playing') {
+    requestAnimationFrame(render);
+  } else {
+    // One more frame for particles
+    if (particles.length > 0) requestAnimationFrame(render);
+  }
+}
+
+// ============================================================
+// Game Logic
+// ============================================================
+function checkGameState() {
+  // Update HUD
+  const progress = totalOutlineCells > 0 ? (brokenOutlineCells / totalOutlineCells * 100) : 0;
+  document.getElementById('progress-bar').style.width = progress + '%';
+  
+  const integrity = totalInsideCells > 0 ? Math.max(0, 100 - (brokenInsideCells / totalInsideCells * 100)) : 100;
+  document.getElementById('integrity').textContent = Math.round(integrity);
+  
+  if (integrity < 85) {
+    document.getElementById('integrity-display').classList.add('warning');
+  }
+  
+  // Lose condition: too many inside cells broken
+  if (brokenInsideCells > totalInsideCells * 0.08) {
+    endGame('lose');
+    return;
+  }
+  
+  // Win condition: enough outline cells broken
+  if (brokenOutlineCells >= totalOutlineCells * 0.92) {
+    endGame('win');
+    return;
+  }
+}
+
+function startGame() {
+  initAudio();
+  gameState = 'playing';
+  timeLeft = TIME_LIMIT;
+  particles = [];
+  
+  initGrid(selectedShape);
+  createCandyPattern();
+  
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('timer-display').classList.remove('warning');
+  document.getElementById('integrity-display').classList.remove('warning');
+  
+  // Start timer
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    document.getElementById('timer').textContent = timeLeft;
+    if (timeLeft <= 15) {
+      document.getElementById('timer-display').classList.add('warning');
+    }
+    if (timeLeft <= 0) {
+      endGame('lose');
+    }
+  }, 1000);
+  
+  requestAnimationFrame(render);
+}
+
+function endGame(result) {
+  gameState = result;
+  clearInterval(timerInterval);
+  
+  setTimeout(() => {
+    const overlay = document.getElementById('overlay');
+    overlay.classList.remove('hidden');
+    document.getElementById('menu-screen').style.display = 'none';
+    document.getElementById('result-screen').style.display = 'flex';
+    document.getElementById('result-screen').style.flexDirection = 'column';
+    document.getElementById('result-screen').style.alignItems = 'center';
+    
+    if (result === 'win') {
+      soundWin();
+      document.getElementById('result-emoji').textContent = '🎉';
+      document.getElementById('result-title').textContent = '성공!';
+      document.getElementById('result-subtitle').textContent = `${TIME_LIMIT - timeLeft}초 만에 뽑기 성공!`;
+    } else {
+      soundLose();
+      document.getElementById('result-emoji').textContent = '💔';
+      document.getElementById('result-title').textContent = '실패...';
+      document.getElementById('result-subtitle').textContent = 
+        timeLeft <= 0 ? '시간이 초과되었습니다!' : '달고나가 깨져버렸습니다!';
+    }
+  }, 500);
+}
+
+function showMenu() {
+  gameState = 'menu';
+  clearInterval(timerInterval);
+  const overlay = document.getElementById('overlay');
+  overlay.classList.remove('hidden');
+  document.getElementById('menu-screen').style.display = 'block';
+  document.getElementById('result-screen').style.display = 'none';
+  
+  // Render a preview
+  initGrid(selectedShape);
+  createCandyPattern();
+  requestAnimationFrame(() => { render(); });
+}
+
+// ============================================================
+// Shape Selector
+// ============================================================
+function buildShapeSelector() {
+  const container = document.getElementById('shape-selector');
+  container.innerHTML = '';
+  for (const [key, shape] of Object.entries(SHAPES)) {
+    const btn = document.createElement('div');
+    btn.className = 'shape-btn' + (key === selectedShape ? ' selected' : '');
+    btn.innerHTML = `<span style="font-size:28px">${shape.icon}</span><span>${shape.name}</span>`;
+    btn.onclick = () => {
+      selectedShape = key;
+      document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      // Preview
+      initGrid(selectedShape);
+      createCandyPattern();
+      render();
+    };
+    container.appendChild(btn);
+  }
+}
+
+// ============================================================
+// Input Handling
+// ============================================================
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  mouseX = (e.clientX - rect.left) * scaleX;
+  mouseY = (e.clientY - rect.top) * scaleY;
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (gameState !== 'playing') return;
+  e.preventDefault();
+  
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const cx = (e.clientX - rect.left) * scaleX;
+  const cy = (e.clientY - rect.top) * scaleY;
+  
+  const gx = Math.floor(cx / CELL);
+  const gy = Math.floor(cy / CELL);
+  
+  applyClick(gx, gy);
+  
+  // Also hit adjacent cells with lower chance for a "wider" tool feel
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  for (const [dx, dy] of dirs) {
+    if (Math.random() < 0.25) {
+      const nx = gx + dx, ny = gy + dy;
+      if (nx >= 0 && nx < GRID && ny >= 0 && ny < GRID) {
+        const nc = grid[ny][nx];
+        if (nc.inCookie && !nc.broken && nc.type === 1) {
+          // Only auto-hit outline neighbors
+          nc.hp--;
+          nc.crackLevel++;
+          if (nc.hp <= 0) breakCell(nx, ny);
+        }
+      }
+    }
+  }
+});
+
+// Touch support
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (gameState !== 'playing') return;
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  mouseX = (touch.clientX - rect.left) * scaleX;
+  mouseY = (touch.clientY - rect.top) * scaleY;
+  
+  const gx = Math.floor(mouseX / CELL);
+  const gy = Math.floor(mouseY / CELL);
+  applyClick(gx, gy);
+}, {passive: false});
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  mouseX = (touch.clientX - rect.left) * scaleX;
+  mouseY = (touch.clientY - rect.top) * scaleY;
+}, {passive: false});
+
+// ============================================================
+// Button Handlers
+// ============================================================
+document.getElementById('start-btn').onclick = startGame;
+document.getElementById('retry-btn').onclick = showMenu;
+
+// ============================================================
+// Initialize
+// ============================================================
+buildShapeSelector();
+initGrid(selectedShape);
+createCandyPattern();
+render();
+</script>
+</body>
+</html>

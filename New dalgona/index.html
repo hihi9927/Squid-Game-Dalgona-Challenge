@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>달고나 뽑기</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #3B2510;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh;
+    font-family: 'Jua', 'Noto Sans KR', sans-serif;
+    overflow: hidden;
+    background-image:
+      radial-gradient(ellipse at 30% 20%, rgba(90,60,30,0.5) 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 80%, rgba(60,35,15,0.4) 0%, transparent 60%);
+  }
+
+  /* ── 레이아웃 ── */
+  #game-wrapper {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  #title-bar {
+    color: #F0D090; font-size: 28px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    letter-spacing: 4px;
+  }
+
+  /* ── HUD ── */
+  #hud {
+    display: flex; gap: 24px; align-items: center;
+    color: #E8C87A; font-size: 17px; flex-wrap: wrap; justify-content: center;
+  }
+  .hud-item {
+    background: rgba(60,35,15,0.7); border: 2px solid #8B6914;
+    border-radius: 12px; padding: 6px 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .hud-item.warning {
+    border-color: #C0392B; color: #E74C3C;
+    animation: pulse 0.5s infinite alternate;
+  }
+  @keyframes pulse { from { opacity: 0.7; } to { opacity: 1; } }
+
+  #progress-container {
+    width: 180px; height: 8px; background: rgba(60,35,15,0.7);
+    border-radius: 4px; overflow: hidden; border: 1px solid #8B6914;
+  }
+  #progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #D4952B, #E8B84B);
+    transition: width 0.15s; width: 0%;
+  }
+
+  /* ── 캔버스 영역 ── */
+  #canvas-container {
+    position: relative; border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.1);
+    background: #4A2E14; padding: 20px;
+  }
+  #canvas-slot {
+    /* Renderer가 크기를 설정 */
+    position: relative;
+  }
+
+  /* ── 오버레이 ── */
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    background: rgba(30,15,5,0.88); border-radius: 16px;
+    z-index: 10; transition: opacity 0.4s;
+  }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+  #overlay h1 {
+    color: #F0D090; font-size: 34px; margin-bottom: 8px; letter-spacing: 3px;
+  }
+  #overlay h2 {
+    color: #E8C87A; font-size: 20px; margin-bottom: 20px; font-weight: normal;
+  }
+  #overlay p {
+    color: #C8A870; font-size: 14px; margin-bottom: 18px;
+    max-width: 380px; text-align: center; line-height: 1.6;
+  }
+
+  /* ── 버튼 ── */
+  .btn {
+    background: linear-gradient(135deg, #D4952B, #B87D20);
+    color: #FFF8E8; border: none; padding: 12px 32px; font-size: 18px;
+    border-radius: 10px; cursor: pointer;
+    font-family: 'Jua', sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    transition: transform 0.15s, box-shadow 0.15s;
+    margin: 6px;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+  .btn:active { transform: translateY(1px); }
+
+  /* ── 모양 선택 ── */
+  .shape-selector { display: flex; gap: 10px; margin: 14px 0; flex-wrap: wrap; justify-content: center; }
+  .shape-btn {
+    width: 72px; height: 72px;
+    background: rgba(212,149,43,0.12);
+    border: 2px solid #8B6914; border-radius: 12px;
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: all 0.2s; color: #E8C87A; font-size: 13px; gap: 3px;
+  }
+  .shape-btn:hover, .shape-btn.selected {
+    background: rgba(212,149,43,0.35);
+    border-color: #D4952B; transform: scale(1.05);
+  }
+
+  /* ── 결과 화면 ── */
+  .result-text { font-size: 48px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div id="game-wrapper">
+  <div id="title-bar">달 고 나 뽑 기</div>
+
+  <div id="hud">
+    <div class="hud-item" id="timer-display">⏱ <span id="timer">90</span>초</div>
+    <div class="hud-item">
+      진행률 <div id="progress-container"><div id="progress-bar"></div></div>
+    </div>
+    <div class="hud-item" id="integrity-display">💛 모양 상태: <span id="integrity">100</span>%</div>
+  </div>
+
+  <div id="canvas-container">
+    <div id="canvas-slot"></div>
+
+    <div id="overlay">
+      <div id="menu-screen">
+        <h1>🍬 달고나 뽑기</h1>
+        <h2>모양을 골라 뽑아내세요!</h2>
+        <p>
+          윤곽선을 따라 클릭하여 달고나를 깨세요.<br>
+          윤곽선은 <b>한 번</b>, 그 외 부분은 <b>여러 번</b> 클릭해야 합니다.<br>
+          모양 내부를 깨뜨리면 실패!
+        </p>
+        <div class="shape-selector" id="shape-selector"></div>
+        <button class="btn" id="start-btn">시작하기</button>
+      </div>
+
+      <div id="result-screen" style="display:none;">
+        <div class="result-text" id="result-emoji"></div>
+        <h1 id="result-title"></h1>
+        <h2 id="result-subtitle"></h2>
+        <button class="btn" id="retry-btn">다시 하기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JS 모듈 (의존성 순서대로 로드) -->
+<script src="js/config.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/shapes.js"></script>
+<script src="js/grid.js"></script>
+<script src="js/particles.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/game.js"></script>
+<script src="js/crack.js"></script>
+<script src="js/input.js"></script>
+<script src="js/main.js"></script>
+
+</body>
+</html>

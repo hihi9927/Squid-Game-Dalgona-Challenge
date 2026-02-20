@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>달고나 뽑기 게임</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', sans-serif;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #game-container {
+            text-align: center;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: #e8a87c;
+            text-shadow: 0 0 20px rgba(232, 168, 124, 0.5);
+        }
+
+        #status {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            height: 30px;
+            color: #ccc;
+        }
+
+        #canvas-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        canvas {
+            border-radius: 50%;
+            cursor: none;
+            display: block;
+        }
+
+        #needle-cursor {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+
+        #needle-cursor svg {
+            width: 32px;
+            height: 32px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #e8a87c, #d4845f);
+            color: #1a1a2e;
+            border: none;
+            padding: 14px 40px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 8px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(232, 168, 124, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(232, 168, 124, 0.5);
+        }
+
+        #shape-select {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .shape-btn {
+            background: rgba(255,255,255,0.08);
+            border: 2px solid rgba(232, 168, 124, 0.4);
+            color: #e8a87c;
+            width: 90px;
+            height: 90px;
+            border-radius: 15px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            gap: 6px;
+        }
+
+        .shape-btn:hover {
+            background: rgba(232, 168, 124, 0.15);
+            border-color: #e8a87c;
+            transform: scale(1.08);
+        }
+
+        .shape-btn svg {
+            width: 40px;
+            height: 40px;
+            fill: none;
+            stroke: #e8a87c;
+            stroke-width: 2;
+        }
+
+        #timer-bar {
+            width: 400px;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin: 10px auto;
+            overflow: hidden;
+        }
+
+        #timer-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e8a87c, #ff6b6b);
+            border-radius: 4px;
+            transition: width 0.1s linear;
+            width: 100%;
+        }
+
+        #progress-text {
+            font-size: 0.9rem;
+            color: #aaa;
+            margin-top: 8px;
+        }
+
+        #lick-btn {
+            display: none;
+            padding: 10px 24px;
+            font-size: 1rem;
+            margin-top: 8px;
+        }
+
+        #lick-timer-bar {
+            width: 400px;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin: 8px auto 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        #lick-timer-fill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #ffd37e, #ff8a5b);
+            border-radius: 4px;
+            transition: width 0.1s linear;
+        }
+
+        #tongue-tool {
+            position: absolute;
+            width: 260px;
+            height: 260px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            cursor: grab;
+            z-index: 15;
+            user-select: none;
+        }
+
+        #tongue-tool.dragging {
+            cursor: grabbing;
+        }
+
+        .tongue-svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
+            pointer-events: none;
+        }
+
+        /* 결과 오버레이 */
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 2000;
+        }
+
+        #overlay.show { display: flex; }
+
+        #overlay h2 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        #overlay p {
+            font-size: 1.2rem;
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+
+        .success-text { color: #4ecca3 !important; text-shadow: 0 0 30px rgba(78, 204, 163, 0.5); }
+        .fail-text { color: #ff6b6b !important; text-shadow: 0 0 30px rgba(255, 107, 107, 0.5); }
+    </style>
+</head>
+<body>
+    <!-- 바늘 커서 -->
+    <div id="needle-cursor">
+        <svg viewBox="0 0 32 32">
+            <line x1="16" y1="2" x2="16" y2="28" stroke="#ddd" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="16" cy="28" r="2.5" fill="#ddd"/>
+        </svg>
+    </div>
+
+    <div id="game-container">
+        <h1>🍬 달고나 뽑기 게임</h1>
+        <div id="status">모양을 선택하세요</div>
+
+        <!-- 모양 선택 화면 -->
+        <div id="shape-select">
+            <button class="shape-btn" onclick="startGame('circle')">
+                <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15"/></svg>
+                동그라미
+            </button>
+            <button class="shape-btn" onclick="startGame('triangle')">
+                <svg viewBox="0 0 40 40"><polygon points="20,5 35,35 5,35"/></svg>
+                세모
+            </button>
+            <button class="shape-btn" onclick="startGame('star')">
+                <svg viewBox="0 0 40 40"><polygon points="20,4 24,15 36,15 27,22 30,34 20,27 10,34 13,22 4,15 16,15"/></svg>
+                별
+            </button>
+            <button class="shape-btn" onclick="startGame('umbrella')">
+                <svg viewBox="0 0 40 40">
+                    <path d="M20,8 Q8,8 6,20 L12,20 Q12,14 20,14 Q28,14 28,20 L34,20 Q32,8 20,8 Z"/>
+                    <line x1="20" y1="14" x2="20" y2="34" stroke-width="2"/>
+                    <path d="M20,34 Q16,34 16,30" fill="none" stroke-width="2"/>
+                </svg>
+                우산
+            </button>
+        </div>
+
+        <!-- 게임 캔버스 -->
+        <div id="canvas-wrapper" style="display:none;">
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+            <div id="tongue-tool">
+                <svg class="tongue-svg" viewBox="0 0 380 380" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="lipGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#ff8a8f"/>
+                            <stop offset="100%" stop-color="#ff5d73"/>
+                        </linearGradient>
+                        <linearGradient id="tongueGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#f8a9af"/>
+                            <stop offset="100%" stop-color="#eb8f98"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M35 170 C60 120,105 92,160 92 C181 92,198 102,212 112 C226 102,245 92,270 92 C322 92,357 124,345 172 C322 203,294 216,268 222 C242 229,233 250,228 292 C226 316,211 332,190 332 C166 332,150 316,150 292 C145 249,136 229,109 222 C83 215,56 203,35 170 Z" fill="url(#lipGrad)"/>
+                    <path d="M73 170 C107 140,141 128,189 128 C238 128,272 140,307 170 C283 183,252 191,190 191 C128 191,98 183,73 170 Z" fill="#fff7f7"/>
+                    <path d="M114 191 C126 214,133 239,134 267 C135 298,157 324,190 324 C223 324,245 298,246 267 C247 240,253 215,266 191 C242 198,221 201,190 201 C159 201,138 198,114 191 Z" fill="url(#tongueGrad)"/>
+                    <path d="M190 204 C181 226,177 244,177 268 C177 284,183 298,190 304 C197 298,203 284,203 268 C203 244,199 226,190 204 Z" fill="#df7985" opacity="0.75"/>
+                    <ellipse cx="151" cy="268" rx="23" ry="40" fill="#f7b0b7" opacity="0.35"/>
+                </svg>
+            </div>
+        </div>
+        <div id="timer-bar" style="display:none;"><div id="timer-fill"></div></div>
+        <div id="lick-timer-bar"><div id="lick-timer-fill"></div></div>
+        <div id="progress-text" style="display:none;"></div>
+        <button id="lick-btn" class="btn" onclick="activateLickTool()">핥기</button>
+    </div>
+
+    <!-- 결과 오버레이 -->
+    <div id="overlay">
+        <h2 id="result-title"></h2>
+        <p id="result-msg"></p>
+        <button class="btn" onclick="resetGame()">다시 하기</button>
+    </div>
+
+    <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const canvasWrapper = document.getElementById('canvas-wrapper');
+    const needle = document.getElementById('needle-cursor');
+    const lickBtn = document.getElementById('lick-btn');
+    const lickTimerBar = document.getElementById('lick-timer-bar');
+    const lickTimerFill = document.getElementById('lick-timer-fill');
+    const tongueTool = document.getElementById('tongue-tool');
+    const W = 400, H = 400, CX = W / 2, CY = H / 2;
+
+    let shapePoints = [];       // 모양 외곽선 점들
+    let tracedCount = 0;        // 추적 완료된 점 수
+    let isTracing = false;      // 마우스 누르고 있는 중
+    let gameActive = false;
+    let currentShape = '';
+    let traceRadius = 12;       // 기본 반경 (UI 참고용)
+    let pointRadius = 4;        // 각 점의 크기
+    const START_HIT_RADIUS = 5;
+    const TRACE_HIT_RADIUS = 8;
+    const DRAG_PATH_TOLERANCE = 9;
+    const OUT_OF_PATH_RADIUS = 20;
+    const ADJACENT_SEARCH_RANGE = 3;
+    const LICK_UNLOCK_RATIO = 0.5;
+    const LICK_DURATION = 5;
+    const TONGUE_SIZE = 260;
+    const LICK_EFFECT_RADIUS = 70;
+    const LICK_LEVEL_MAX = 2.1;
+    const LICK_GROWTH_RATE = 0.1;
+    let segmentBreakStarts = new Set(); // 해당 인덱스는 새 선분 시작점
+    let tracedFlags = [];       // 각 점이 추적되었는지
+    let lickedLevels = [];      // 각 점의 핥기 누적 강도
+    let totalTime = 30;         // 제한시간 30초
+    let timeLeft = 30;
+    let timerInterval = null;
+    let lastTracedIndex = -1;   // 마지막으로 추적된 점 인덱스
+    let lickButtonShown = false;
+    let lickUsed = false;
+    let tongueVisible = false;
+    let tongueDragging = false;
+    let lickTimerStarted = false;
+    let lickTimeLeft = LICK_DURATION;
+    let lickInterval = null;
+
+    // 바늘 커서 따라가기
+    document.addEventListener('mousemove', (e) => {
+        needle.style.left = (e.clientX - 16) + 'px';
+        needle.style.top = (e.clientY - 16) + 'px';
+
+        if (gameActive && tongueVisible && tongueDragging) {
+            moveTongueToClient(e.clientX, e.clientY);
+            lickAtClient(e.clientX, e.clientY);
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        tongueDragging = false;
+        tongueTool.classList.remove('dragging');
+    });
+
+    // --- 모양 점 생성 ---
+    function generateShapePoints(shape) {
+        const points = [];
+        const spacing = 6; // 점 간격 (픽셀)
+        segmentBreakStarts = new Set();
+
+        if (shape === 'circle') {
+            const r = 120;
+            const circumference = 2 * Math.PI * r;
+            const count = Math.floor(circumference / spacing);
+            for (let i = 0; i < count; i++) {
+                const angle = (2 * Math.PI * i) / count - Math.PI / 2;
+                points.push({ x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) });
+            }
+        } else if (shape === 'triangle') {
+            const r = 130;
+            const vertices = [];
+            for (let i = 0; i < 3; i++) {
+                const angle = (2 * Math.PI * i) / 3 - Math.PI / 2;
+                vertices.push({ x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) });
+            }
+            for (let i = 0; i < 3; i++) {
+                const a = vertices[i], b = vertices[(i + 1) % 3];
+                const dist = Math.hypot(b.x - a.x, b.y - a.y);
+                const count = Math.floor(dist / spacing);
+                for (let j = 0; j < count; j++) {
+                    const t = j / count;
+                    points.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+                }
+            }
+        } else if (shape === 'star') {
+            const outerR = 130, innerR = 55;
+            const vertices = [];
+            for (let i = 0; i < 10; i++) {
+                const angle = (Math.PI * i) / 5 - Math.PI / 2;
+                const r = i % 2 === 0 ? outerR : innerR;
+                vertices.push({ x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) });
+            }
+            for (let i = 0; i < 10; i++) {
+                const a = vertices[i], b = vertices[(i + 1) % 10];
+                const dist = Math.hypot(b.x - a.x, b.y - a.y);
+                const count = Math.floor(dist / spacing);
+                for (let j = 0; j < count; j++) {
+                    const t = j / count;
+                    points.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+                }
+            }
+        } else if (shape === 'umbrella') {
+            // 우산 윗부분 (반원)
+            const r = 120;
+            const topY = CY - 30;
+            const arcCount = Math.floor((Math.PI * r) / spacing);
+            for (let i = 0; i <= arcCount; i++) {
+                const angle = Math.PI + (Math.PI * i) / arcCount;
+                points.push({ x: CX + r * Math.cos(angle), y: topY + r * Math.sin(angle) });
+            }
+
+            // 우산 캔버시 하단 선 (오른쪽 -> 왼쪽)
+            const bottomCount = Math.floor((2 * r) / spacing);
+            for (let i = 1; i <= bottomCount; i++) {
+                const t = i / bottomCount;
+                points.push({ x: (CX + r) - (2 * r * t), y: topY });
+            }
+
+            // 손잡이 (아래로 내려가는 직선)
+            const handleTop = topY;
+            const handleBottom = CY + 110;
+            segmentBreakStarts.add(points.length);
+            const handleCount = Math.floor((handleBottom - handleTop) / spacing);
+            for (let i = 0; i <= handleCount; i++) {
+                const t = i / handleCount;
+                points.push({ x: CX, y: handleTop + (handleBottom - handleTop) * t });
+            }
+            // 갈고리 (작은 반원)
+            const hookR = 18;
+            const hookCX = CX - hookR;
+            const hookCY = handleBottom;
+            const hookCount = Math.floor((Math.PI * hookR) / spacing);
+            for (let i = 0; i <= hookCount; i++) {
+                const angle = (Math.PI * i) / hookCount;
+                points.push({ x: hookCX + hookR * Math.cos(angle), y: hookCY + hookR * Math.sin(angle) });
+            }
+        }
+
+        return points;
+    }
+
+    // --- 그리기 ---
+    function drawDalgona() {
+        ctx.clearRect(0, 0, W, H);
+
+        // 달고나 배경 (원형)
+        const grad = ctx.createRadialGradient(CX, CY, 50, CX, CY, 200);
+        grad.addColorStop(0, '#e8a87c');
+        grad.addColorStop(0.7, '#d4845f');
+        grad.addColorStop(1, '#b8693f');
+        ctx.beginPath();
+        ctx.arc(CX, CY, 195, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // 달고나 테두리
+        ctx.beginPath();
+        ctx.arc(CX, CY, 195, 0, Math.PI * 2);
+        ctx.strokeStyle = '#a0572e';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 약간의 질감 (점무늬)
+        for (let i = 0; i < 80; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 180;
+            const px = CX + dist * Math.cos(angle);
+            const py = CY + dist * Math.sin(angle);
+            ctx.beginPath();
+            ctx.arc(px, py, 1, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(160, 87, 46, 0.3)';
+            ctx.fill();
+        }
+
+        // 모양 외곽선 (아직 추적 안 된 점)
+        for (let i = 0; i < shapePoints.length; i++) {
+            const p = shapePoints[i];
+            const lickLevel = lickedLevels[i] || 0;
+            const isLicked = lickLevel > 0;
+            const dotRadius = getDotRadius(i);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, dotRadius, 0, Math.PI * 2);
+            ctx.fillStyle = tracedFlags[i]
+                ? 'rgba(78, 204, 163, 0.85)'
+                : (isLicked ? 'rgba(120, 60, 32, 0.88)' : 'rgba(80, 40, 20, 0.6)');
+            ctx.fill();
+        }
+
+        // 모양 연결선 (가이드)
+        ctx.beginPath();
+        ctx.moveTo(shapePoints[0].x, shapePoints[0].y);
+        for (let i = 1; i < shapePoints.length; i++) {
+            if (segmentBreakStarts.has(i)) {
+                ctx.moveTo(shapePoints[i].x, shapePoints[i].y);
+            } else {
+                ctx.lineTo(shapePoints[i].x, shapePoints[i].y);
+            }
+        }
+        if (currentShape !== 'umbrella') ctx.closePath();
+        ctx.strokeStyle = 'rgba(80, 40, 20, 0.35)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 추적된 부분 강조선 (연속된 구간만 연결)
+        ctx.strokeStyle = 'rgba(78, 204, 163, 0.9)';
+        ctx.lineWidth = 3;
+        let inSegment = false;
+        for (let i = 0; i < shapePoints.length; i++) {
+            const mustBreak = segmentBreakStarts.has(i);
+            if (tracedFlags[i]) {
+                if (!inSegment || mustBreak) {
+                    if (inSegment) ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(shapePoints[i].x, shapePoints[i].y);
+                    inSegment = true;
+                } else {
+                    ctx.lineTo(shapePoints[i].x, shapePoints[i].y);
+                }
+            } else {
+                if (inSegment) {
+                    ctx.stroke();
+                    inSegment = false;
+                }
+            }
+        }
+        if (inSegment) ctx.stroke();
+    }
+
+    // --- 게임 시작 ---
+    function startGame(shape) {
+        currentShape = shape;
+        shapePoints = generateShapePoints(shape);
+        tracedFlags = new Array(shapePoints.length).fill(false);
+        lickedLevels = new Array(shapePoints.length).fill(0);
+        tracedCount = 0;
+        lastTracedIndex = -1;
+        isTracing = false;
+        gameActive = true;
+        timeLeft = totalTime;
+        resetLickState();
+
+        document.getElementById('shape-select').style.display = 'none';
+        document.getElementById('canvas-wrapper').style.display = 'inline-block';
+        document.getElementById('timer-bar').style.display = 'block';
+        document.getElementById('progress-text').style.display = 'block';
+        needle.style.display = 'block';
+
+        const names = { circle: '동그라미', triangle: '세모', star: '별', umbrella: '우산' };
+        document.getElementById('status').textContent = `"${names[shape]}" 모양을 바늘로 따라가세요! (클릭하고 드래그)`;
+
+        drawDalgona();
+        updateProgress();
+
+        // 타이머
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeLeft -= 0.1;
+            document.getElementById('timer-fill').style.width = ((timeLeft / totalTime) * 100) + '%';
+
+            if (!lickButtonShown && !lickUsed && timeLeft <= totalTime * LICK_UNLOCK_RATIO) {
+                lickButtonShown = true;
+                lickBtn.style.display = 'inline-block';
+            }
+            if (timeLeft <= 0) {
+                endGame(false, '시간 초과!');
+            }
+        }, 100);
+    }
+
+    function updateProgress() {
+        const pct = Math.floor((tracedCount / shapePoints.length) * 100);
+        document.getElementById('progress-text').textContent = `진행률: ${pct}%`;
+    }
+
+    // --- 마우스 이벤트 ---
+    let dragTracedIndex = -1; // 현재 드래그 중 마지막 추적 인덱스
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (!gameActive) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const clickedIdx = findClickedPoint(mx, my);
+        if (clickedIdx === -1) {
+            endGame(false, '점을 정확히 클릭하지 않았습니다!');
+            return;
+        }
+
+        if (lastTracedIndex !== -1) {
+            const adjacent = getAdjacentIndices(lastTracedIndex);
+            if (!adjacent.includes(clickedIdx)) {
+                endGame(false, '순서대로 점을 클릭해야 합니다!');
+                return;
+            }
+        }
+
+        isTracing = true;
+        dragTracedIndex = clickedIdx;
+        tracePoint(clickedIdx);
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (!gameActive || !isTracing) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        // 드래그 중에는 현재 점에서 인접 점으로 이어지는 경로 통로 안에 있어야 함
+        if (!isOnDraggablePath(mx, my, dragTracedIndex)) {
+            endGame(false, '선을 벗어났습니다!');
+            return;
+        }
+
+        // 현재 드래그의 다음 점 찾기 (앞뒤 방향 모두)
+        const nearIdx = findAdjacentPoint(mx, my, dragTracedIndex);
+        if (nearIdx !== -1) {
+            const d = distTo(mx, my, shapePoints[nearIdx]);
+            if (d <= TRACE_HIT_RADIUS) {
+                tracePoint(nearIdx);
+                dragTracedIndex = nearIdx;
+            }
+        }
+
+        // 모양에서 너무 멀리 벗어났는지 확인
+        const closest = findClosestPoint(mx, my);
+        if (closest !== -1 && distTo(mx, my, shapePoints[closest]) > OUT_OF_PATH_RADIUS) {
+            endGame(false, '선을 벗어났습니다!');
+        }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+        isTracing = false;
+        dragTracedIndex = -1;
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+        isTracing = false;
+        dragTracedIndex = -1;
+    });
+
+    tongueTool.addEventListener('mousedown', (e) => {
+        if (!gameActive || !tongueVisible) return;
+        e.preventDefault();
+        if (!lickTimerStarted) startLickTimer();
+        tongueDragging = true;
+        tongueTool.classList.add('dragging');
+        moveTongueToClient(e.clientX, e.clientY);
+        lickAtClient(e.clientX, e.clientY);
+    });
+
+    function distTo(mx, my, p) {
+        return Math.hypot(mx - p.x, my - p.y);
+    }
+
+    function distPointToSegment(mx, my, a, b) {
+        const abx = b.x - a.x;
+        const aby = b.y - a.y;
+        const apx = mx - a.x;
+        const apy = my - a.y;
+        const abLenSq = abx * abx + aby * aby;
+        if (abLenSq === 0) return Math.hypot(apx, apy);
+        const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLenSq));
+        const cx = a.x + abx * t;
+        const cy = a.y + aby * t;
+        return Math.hypot(mx - cx, my - cy);
+    }
+
+    function hasSegmentBreakBetween(a, b) {
+        if (segmentBreakStarts.size === 0 || a === b) return false;
+        const from = Math.min(a, b) + 1;
+        const to = Math.max(a, b);
+        for (let i = from; i <= to; i++) {
+            if (segmentBreakStarts.has(i)) return true;
+        }
+        return false;
+    }
+
+    function getAdjacentIndices(fromIdx) {
+        const indices = [];
+        for (let offset = -ADJACENT_SEARCH_RANGE; offset <= ADJACENT_SEARCH_RANGE; offset++) {
+            if (offset === 0) continue;
+            let idx = fromIdx + offset;
+            if (currentShape !== 'umbrella') {
+                idx = ((idx % shapePoints.length) + shapePoints.length) % shapePoints.length;
+            } else if (idx < 0 || idx >= shapePoints.length) {
+                continue;
+            }
+            if (hasSegmentBreakBetween(fromIdx, idx)) continue;
+            if (!indices.includes(idx)) indices.push(idx);
+        }
+        return indices;
+    }
+
+    function isOnDraggablePath(mx, my, fromIdx) {
+        if (fromIdx < 0 || fromIdx >= shapePoints.length) return false;
+        let minDist = distTo(mx, my, shapePoints[fromIdx]);
+        const adjacent = getAdjacentIndices(fromIdx);
+        for (const idx of adjacent) {
+            const d = distPointToSegment(mx, my, shapePoints[fromIdx], shapePoints[idx]);
+            if (d < minDist) minDist = d;
+        }
+        return minDist <= DRAG_PATH_TOLERANCE;
+    }
+
+    function findClosestPoint(mx, my) {
+        let best = -1, bestD = Infinity;
+        for (let i = 0; i < shapePoints.length; i++) {
+            const d = distTo(mx, my, shapePoints[i]);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+    }
+
+    function getDotRadius(idx) {
+        const lickLevel = lickedLevels[idx] || 0;
+        if (tracedFlags[idx]) return 3.2 + Math.min(1.8, lickLevel * 1.4);
+        return 2 + Math.min(2.0, lickLevel * 1.6);
+    }
+
+    function findClickedPoint(mx, my) {
+        for (let i = 0; i < shapePoints.length; i++) {
+            const hitRadius = Math.max(START_HIT_RADIUS, getDotRadius(i) + 1);
+            if (distTo(mx, my, shapePoints[i]) <= hitRadius) return i;
+        }
+        return -1;
+    }
+
+    // 현재 위치에서 인접한 점만 찾기 (앞뒤 몇 개)
+    function findAdjacentPoint(mx, my, fromIdx) {
+        let best = -1, bestD = Infinity;
+        const adjacent = getAdjacentIndices(fromIdx);
+        for (const idx of adjacent) {
+            const d = distTo(mx, my, shapePoints[idx]);
+            if (d < bestD) { bestD = d; best = idx; }
+        }
+        return best;
+    }
+
+    function tracePoint(idx) {
+        if (!tracedFlags[idx]) {
+            tracedFlags[idx] = true;
+            tracedCount++;
+        }
+        lastTracedIndex = idx;
+
+        drawDalgona();
+        updateProgress();
+
+        // 클리어 확인
+        if (tracedCount >= shapePoints.length) {
+            endGame(true, '');
+        }
+    }
+
+    function activateLickTool() {
+        if (!gameActive || lickUsed || tongueVisible) return;
+        tongueVisible = true;
+        lickBtn.style.display = 'none';
+
+        const startX = CX - (TONGUE_SIZE / 2);
+        const startY = CY - (TONGUE_SIZE / 2);
+        tongueTool.style.left = `${startX}px`;
+        tongueTool.style.top = `${startY}px`;
+        tongueTool.style.display = 'flex';
+    }
+
+    function moveTongueToClient(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const mx = clientX - rect.left;
+        const my = clientY - rect.top;
+        const clampedX = Math.max(0, Math.min(W, mx));
+        const clampedY = Math.max(0, Math.min(H, my));
+
+        tongueTool.style.left = `${clampedX - (TONGUE_SIZE / 2)}px`;
+        tongueTool.style.top = `${clampedY - (TONGUE_SIZE / 2)}px`;
+    }
+
+    function lickAtClient(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const mx = clientX - rect.left;
+        const my = clientY - rect.top;
+        if (mx < 0 || mx > W || my < 0 || my > H) return;
+
+        let changed = false;
+        for (let i = 0; i < shapePoints.length; i++) {
+            const d = distTo(mx, my, shapePoints[i]);
+            if (d <= LICK_EFFECT_RADIUS) {
+                const influence = 1 - (d / LICK_EFFECT_RADIUS);
+                const before = lickedLevels[i];
+                const next = Math.min(LICK_LEVEL_MAX, before + (LICK_GROWTH_RATE * influence));
+                lickedLevels[i] = next;
+                if (next !== before) changed = true;
+            }
+        }
+        if (changed) drawDalgona();
+    }
+
+    function startLickTimer() {
+        lickTimerStarted = true;
+        lickTimeLeft = LICK_DURATION;
+        lickTimerFill.style.width = '100%';
+        lickTimerBar.style.display = 'block';
+
+        clearInterval(lickInterval);
+        lickInterval = setInterval(() => {
+            lickTimeLeft -= 0.1;
+            const ratio = Math.max(0, lickTimeLeft / LICK_DURATION);
+            lickTimerFill.style.width = `${ratio * 100}%`;
+            if (lickTimeLeft <= 0) {
+                deactivateLickTool();
+            }
+        }, 100);
+    }
+
+    function deactivateLickTool() {
+        clearInterval(lickInterval);
+        lickInterval = null;
+        lickUsed = true;
+        tongueVisible = false;
+        tongueDragging = false;
+        lickTimerStarted = false;
+        lickTimerBar.style.display = 'none';
+        lickTimerFill.style.width = '100%';
+        tongueTool.classList.remove('dragging');
+        tongueTool.style.display = 'none';
+        lickBtn.style.display = 'none';
+    }
+
+    function resetLickState() {
+        clearInterval(lickInterval);
+        lickInterval = null;
+        lickButtonShown = false;
+        lickUsed = false;
+        tongueVisible = false;
+        tongueDragging = false;
+        lickTimerStarted = false;
+        lickTimeLeft = LICK_DURATION;
+        lickBtn.style.display = 'none';
+        lickTimerBar.style.display = 'none';
+        lickTimerFill.style.width = '100%';
+        tongueTool.classList.remove('dragging');
+        tongueTool.style.display = 'none';
+    }
+
+    // --- 게임 종료 ---
+    function endGame(success, reason) {
+        gameActive = false;
+        isTracing = false;
+        clearInterval(timerInterval);
+        clearInterval(lickInterval);
+        needle.style.display = 'none';
+        tongueVisible = false;
+        tongueDragging = false;
+        tongueTool.style.display = 'none';
+        lickBtn.style.display = 'none';
+        lickTimerBar.style.display = 'none';
+
+        const overlay = document.getElementById('overlay');
+        const title = document.getElementById('result-title');
+        const msg = document.getElementById('result-msg');
+
+        if (success) {
+            title.textContent = '🎉 클리어!';
+            title.className = 'success-text';
+            const elapsed = (totalTime - timeLeft).toFixed(1);
+            msg.textContent = `${elapsed}초 만에 성공했습니다!`;
+
+            // 성공 이펙트 - 캔버스에 녹색 테두리
+            ctx.beginPath();
+            ctx.arc(CX, CY, 195, 0, Math.PI * 2);
+            ctx.strokeStyle = '#4ecca3';
+            ctx.lineWidth = 6;
+            ctx.stroke();
+        } else {
+            title.textContent = '💀 실패!';
+            title.className = 'fail-text';
+            msg.textContent = reason;
+
+            // 실패 이펙트 - 금 가는 효과
+            drawCrack();
+        }
+
+        overlay.classList.add('show');
+    }
+
+    function drawCrack() {
+        ctx.strokeStyle = '#5a2d0c';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+
+        let cx = CX + (Math.random() - 0.5) * 100;
+        let cy = CY + (Math.random() - 0.5) * 100;
+        ctx.moveTo(cx, cy);
+
+        for (let i = 0; i < 8; i++) {
+            cx += (Math.random() - 0.5) * 60;
+            cy += (Math.random() - 0.5) * 60;
+            ctx.lineTo(cx, cy);
+        }
+        ctx.stroke();
+
+        // 두 번째 금
+        ctx.beginPath();
+        cx = CX + (Math.random() - 0.5) * 80;
+        cy = CY + (Math.random() - 0.5) * 80;
+        ctx.moveTo(cx, cy);
+        for (let i = 0; i < 6; i++) {
+            cx += (Math.random() - 0.5) * 50;
+            cy += (Math.random() - 0.5) * 50;
+            ctx.lineTo(cx, cy);
+        }
+        ctx.stroke();
+    }
+
+    // --- 리셋 ---
+    function resetGame() {
+        resetLickState();
+        document.getElementById('overlay').classList.remove('show');
+        document.getElementById('shape-select').style.display = 'flex';
+        document.getElementById('canvas-wrapper').style.display = 'none';
+        document.getElementById('timer-bar').style.display = 'none';
+        document.getElementById('progress-text').style.display = 'none';
+        document.getElementById('timer-fill').style.width = '100%';
+        document.getElementById('status').textContent = '모양을 선택하세요';
+        canvas.style.cursor = 'none';
+    }
+    </script>
+</body>
+</html>

@@ -99,6 +99,7 @@ const Grid = (() => {
   function getType(x, y)       { return type[idx(x, y)]; }
   function getCrack(x, y)      { return crackLevel[idx(x, y)]; }
   function addCrack(x, y)      { crackLevel[idx(x, y)]++; }
+  function setCrack(x, y)      { crackLevel[idx(x, y)] += hp[idx(x, y)]; }
   function isBroken(x, y)      { return broken[idx(x, y)] === 1; }
   function setBroken(x, y)     { broken[idx(x, y)] = 1; hp[idx(x, y)] = 0; }
   function isInCookie(x, y)    { return inCookie[idx(x, y)] === 1; }
@@ -111,7 +112,7 @@ const Grid = (() => {
 
   return {
     TYPE_OUTSIDE, TYPE_OUTLINE, TYPE_INSIDE,
-    init, get, getHp, setHp, getType, getCrack, addCrack,
+    init, get, getHp, setHp, getType, getCrack, addCrack, setCrack,
     isBroken, setBroken, isInCookie, getNoise, arrays, idx,
     stats: () => stats,
   };

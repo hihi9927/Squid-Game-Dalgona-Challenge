@@ -147,8 +147,8 @@ const Crack = (() => {
     Audio.click();
 
     // 1) 클릭한 셀에 데미지
-    Grid.setHp(gx, gy, Grid.getHp(gx, gy) - 1);
-    Grid.addCrack(gx, gy);
+    Grid.setCrack(gx, gy);
+    Grid.setHp(gx, gy, 0);
     markDirty(gx, gy);
 
     if (Grid.getHp(gx, gy) <= 0) {

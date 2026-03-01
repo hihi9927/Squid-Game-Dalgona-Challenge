@@ -12,11 +12,12 @@ const CFG = {
   get COOKIE_RADIUS() { return Math.floor(this.GRID * this.COOKIE_RADIUS_RATIO); },
 
   OUTLINE_THICKNESS: 5.5,
-  TIME_LIMIT: 60,
+  TIME_LIMIT: 45,  
+
 
   // HP
   HP_OUTLINE: 1,
-  HP_INNER: 3,
+  HP_INNER: 4,
   HP_OUTER: 3,
   HP_OUTER_WEAK_CHANCE: 0.35,
 
@@ -37,8 +38,8 @@ const CFG = {
   CRACK_DECAY_NORMAL: 0.9,         // 비윤곽선 경유: 빠르게 감쇠
 
   CRACK_DIAG_FACTOR: 0.8,          // 대각선 방향 감쇠
-  CRACK_MAX_DEPTH: 40,              // 최대 전파 깊이
-  CRACK_CONTINUE_CHANCE: 0.9,      // 안 부서진 셀에서 균열 계속 전파할 확률
+  CRACK_MAX_DEPTH: 30,              // 최대 전파 깊이
+  CRACK_CONTINUE_CHANCE: 0.80,      // 안 부서진 셀에서 균열 계속 전파할 확률
 
   // 클릭 시 충격파 반경 (셀 단위)
   CLICK_IMPACT_RADIUS: 5,           // 반경 내 셀에 직접 데미지
@@ -46,6 +47,27 @@ const CFG = {
   CLICK_IMPACT_OTHER_PROB: 0.80,    // 충격파 범위 내 비윤곽선 셀 적중 확률
 
   // 승리/패배 조건
-  WIN_OUTLINE_RATIO: 0.91,
-  LOSE_INSIDE_RATIO: 0.08,
+  WIN_OUTLINE_RATIO: 0.98,
+  LOSE_INSIDE_RATIO: 0.045,
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────New parameter─────────────────────────────────
+  // ──────────────────────────────────────────────────────────────────────────────
+  
+  CROSS_DIR: [[1, 0], [0, 1], [-1, 0], [0, -1]],
+  DIAG_DIR: [[1, 1], [-1, 1], [-1, -1], [1, -1]],
+
+  PIN_THICKNESS: 4,
+  OUTLINE_HP_INIT: 30,
+  NORMAL_HP_INIT:  80,
+  HP_BUBBLE_CHANCE: 0.4,
+  HP_BUBBLE_LOWER_BOUND: 20,
+
+  MAX_PROPAGATION_DEPTH: 35,
+  DAMAGE_INIT: 65,
+  DECAY_BROKEN: 0.95,
+  DECAY_TOUGH: 0.8,
+  DECAY_MIDDLE: 0.9,
+  DECAY_WEAK: 0.95,
+  BONUS_BROKEN: 1.01,
 };

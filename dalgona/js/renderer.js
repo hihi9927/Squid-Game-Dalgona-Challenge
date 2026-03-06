@@ -19,7 +19,7 @@ const Renderer = (() => {
 
   // 혀 이미지 (핥기 커서)
   const tongueImg = new Image();
-  tongueImg.src = '../혀.png';
+  tongueImg.src = '혀.png';
 
   // ---- 색상 유틸 ----
   // Uint32: 0xAABBGGRR (little-endian)

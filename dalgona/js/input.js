@@ -21,6 +21,7 @@ const Input = (() => {
 
     canvas.addEventListener('mousedown', (e) => {
       e.preventDefault();
+      Audio.init();
       const rect = canvas.getBoundingClientRect();
       const sx = canvas.width / rect.width;
       const sy = canvas.height / rect.height;
@@ -59,6 +60,10 @@ const Input = (() => {
         (t.clientY - rect.top) * sy
       );
     }, { passive: false });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'p' || e.key === 'P') Renderer.toggleHint();
+    });
   }
 
   function handleClick(canvasX, canvasY) {

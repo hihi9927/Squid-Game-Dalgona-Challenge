@@ -15,8 +15,6 @@ const Game = (() => {
   const $timer     = () => document.getElementById('timer');
   const $timerWrap = () => document.getElementById('timer-display');
   const $progress  = () => document.getElementById('progress-bar');
-  const $integrity = () => document.getElementById('integrity');
-  const $intWrap   = () => document.getElementById('integrity-display');
   const $overlay   = () => document.getElementById('overlay');
   const $menuScr   = () => document.getElementById('menu-screen');
   const $resultScr = () => document.getElementById('result-screen');
@@ -34,11 +32,6 @@ const Game = (() => {
       ? (stats.brokenOutline / stats.totalOutline * 100) : 0;
     $progress().style.width = progress + '%';
 
-    const integrity = stats.totalInside > 0
-      ? Math.max(0, 100 - (stats.brokenInside / stats.totalInside * 100)) : 100;
-    $integrity().textContent = Math.round(integrity);
-
-    if (integrity < 85) $intWrap().classList.add('warning');
   }
 
   function checkConditions() {
@@ -98,13 +91,12 @@ const Game = (() => {
     Renderer.resetCrackLayer();
     Crack.clearDirty();
     Crack.clearLickable();
+    Crack.reset();
 
     $overlay().classList.add('hidden');
     $timerWrap().classList.remove('warning');
-    $intWrap().classList.remove('warning');
     $timer().textContent = timeLeft;
     $progress().style.width = '0%';
-    $integrity().textContent = '100';
 
     clearInterval(timerHandle);
     timerHandle = setInterval(() => {

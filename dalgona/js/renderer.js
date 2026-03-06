@@ -14,6 +14,8 @@ const Renderer = (() => {
   let shakeX = 0, shakeY = 0;
   let mouseX = 0, mouseY = 0;
   let running = false;
+  let hintMode = false;
+  let outlineCellsCache = [];
 
   // 혀 이미지 (핥기 커서)
   const tongueImg = new Image();
@@ -146,13 +148,15 @@ const Renderer = (() => {
       baseCtx.stroke();
     }*/
 
-    // 윤곽선 가이드 (반투명 도트)
+    // 윤곽선 가이드 (반투명 도트) + 캐시 빌드
+    outlineCellsCache = [];
     baseCtx.fillStyle = 'rgba(120,80,15,0.3)';
     for (let gy = 0; gy < N; gy++) {
       for (let gx = 0; gx < N; gx++) {
         const i = Grid.idx(gx, gy);
         if (arr.inCookie[i] && arr.type[i] === Grid.TYPE_OUTLINE) {
           baseCtx.fillRect(gx * C, gy * C, C, C);
+          outlineCellsCache.push(gx, gy);
         }
       }
     }
@@ -267,6 +271,23 @@ const Renderer = (() => {
       uiCtx.fill();
     }
 
+    // P키 힌트: 클리어 안된 윤곽선 셀 파란 점으로 표시
+    if (hintMode && outlineCellsCache.length > 0) {
+      const arr = Grid.arrays();
+      const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 250);
+      uiCtx.fillStyle = `rgba(80, 160, 255, ${pulse.toFixed(2)})`;
+      uiCtx.shadowColor = 'rgba(100, 180, 255, 0.8)';
+      uiCtx.shadowBlur = 6;
+      for (let i = 0; i < outlineCellsCache.length; i += 2) {
+        const ox = outlineCellsCache[i], oy = outlineCellsCache[i + 1];
+        const idx = Grid.idx(ox, oy);
+        if (!arr.broken[idx]) {
+          uiCtx.fillRect(ox - 1, oy - 1, 3, 3);
+        }
+      }
+      uiCtx.shadowBlur = 0;
+    }
+
     // 승리 하이라이트
     if (gameState === 'win') {
       const N = CFG.GRID, C = CFG.CELL;
@@ -344,6 +365,9 @@ const Renderer = (() => {
   // ---- 마우스 좌표 갱신 ----
   function setMouse(x, y) { mouseX = x; mouseY = y; }
 
+  // ---- 힌트 토글 ----
+  function toggleHint() { hintMode = !hintMode; }
+
   // ---- 최상위 캔버스(입력용) 반환 ----
   function getInputCanvas() { return uiCanvas; }
 
@@ -351,6 +375,6 @@ const Renderer = (() => {
     init, renderBase, resetCrackLayer, updateCrackLayer,
     renderUI, shake, clearShake,
     startLoop, stopLoop,
-    setMouse, getInputCanvas
+    setMouse, getInputCanvas, toggleHint
   };
 })();

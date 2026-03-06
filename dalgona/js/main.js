@@ -4,6 +4,7 @@
 
 (function () {
   let drawVerts = [];
+  let isMouseDown = false;
 
   // ── 모양 선택 버튼 생성 ──
   function buildShapeSelector() {
@@ -75,11 +76,6 @@
       ctx.arc(x, y, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-    // 첫 꼭짓점 강조 (닫기 가이드)
-    ctx.fillStyle = '#E04040';
-    ctx.beginPath();
-    ctx.arc(drawVerts[0][0], drawVerts[0][1], 6, 0, Math.PI * 2);
-    ctx.fill();
   }
 
   // ── 드로우 스크린 열기/닫기 ──
@@ -129,20 +125,52 @@
   document.getElementById('retry-btn').onclick = Game.showMenu;
   document.getElementById('lick-btn').onclick = Game.startLick;
 
-  // ── 드로우 캔버스 클릭 ──
-  document.getElementById('draw-canvas').addEventListener('click', (e) => {
-    const canvas = document.getElementById('draw-canvas');
-    const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (300 / rect.width);
-    const y = (e.clientY - rect.top)  * (300 / rect.height);
-    // 첫 점 근처 클릭 → 완료
-    if (drawVerts.length >= 3) {
-      const dx = x - drawVerts[0][0], dy = y - drawVerts[0][1];
-      if (dx * dx + dy * dy < 12 * 12) { finishDrawing(); return; }
-    }
+  // ── 드로우 캔버스 마우스/터치 ──
+  const drawCanvas = document.getElementById('draw-canvas');
+
+  function getCanvasPos(e) {
+    const rect = drawCanvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return [
+      (src.clientX - rect.left) * (300 / rect.width),
+      (src.clientY - rect.top)  * (300 / rect.height)
+    ];
+  }
+
+  function onDrawStart(e) {
+    e.preventDefault();
+    isMouseDown = true;
+    drawVerts = [];
+    const [x, y] = getCanvasPos(e);
     drawVerts.push([x, y]);
     renderDrawCanvas();
-  });
+  }
+
+  function onDrawMove(e) {
+    e.preventDefault();
+    if (!isMouseDown) return;
+    const [x, y] = getCanvasPos(e);
+    const last = drawVerts[drawVerts.length - 1];
+    const dx = x - last[0], dy = y - last[1];
+    if (dx * dx + dy * dy >= 6 * 6) {
+      drawVerts.push([x, y]);
+      renderDrawCanvas();
+    }
+  }
+
+  function onDrawEnd(e) {
+    e.preventDefault();
+    if (!isMouseDown) return;
+    isMouseDown = false;
+    if (drawVerts.length >= 3) finishDrawing();
+  }
+
+  drawCanvas.addEventListener('mousedown',  onDrawStart);
+  drawCanvas.addEventListener('mousemove',  onDrawMove);
+  drawCanvas.addEventListener('mouseup',    onDrawEnd);
+  drawCanvas.addEventListener('touchstart', onDrawStart, { passive: false });
+  drawCanvas.addEventListener('touchmove',  onDrawMove,  { passive: false });
+  drawCanvas.addEventListener('touchend',   onDrawEnd,   { passive: false });
 
   document.getElementById('draw-done-btn').onclick = finishDrawing;
   document.getElementById('draw-clear-btn').onclick = () => { drawVerts = []; renderDrawCanvas(); };

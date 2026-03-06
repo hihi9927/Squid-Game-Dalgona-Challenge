@@ -3,7 +3,9 @@
 // ============================================================
 
 (function () {
-  // 모양 선택 버튼 생성
+  let drawVerts = [];
+
+  // ── 모양 선택 버튼 생성 ──
   function buildShapeSelector() {
     const container = document.getElementById('shape-selector');
     container.innerHTML = '';
@@ -15,7 +17,6 @@
         Game.setShape(key);
         document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
-        // 꼭짓점 캐시 초기화 후 미리보기
         Shapes.invalidateCache();
         Grid.init(key);
         Renderer.renderBase();
@@ -23,26 +24,127 @@
       };
       container.appendChild(btn);
     }
+    // 커스텀 그리기 버튼 (항상 맨 끝)
+    const customBtn = document.createElement('div');
+    customBtn.className = 'shape-btn' + (Game.getShape() === 'custom' ? ' selected' : '');
+    customBtn.innerHTML = `<span style="font-size:28px">✏️</span><span>직접그리기</span>`;
+    customBtn.onclick = openDrawScreen;
+    container.appendChild(customBtn);
   }
 
-  // 캔버스 컨테이너 초기화
+  // ── 드로우 캔버스 렌더 ──
+  function renderDrawCanvas() {
+    const canvas = document.getElementById('draw-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 300, 300);
+
+    // 쿠키 원 가이드
+    ctx.strokeStyle = 'rgba(212,149,43,0.4)';
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(150, 150, 133, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (drawVerts.length === 0) return;
+
+    // 채우기 프리뷰
+    if (drawVerts.length >= 3) {
+      ctx.fillStyle = 'rgba(212,149,43,0.18)';
+      ctx.beginPath();
+      ctx.moveTo(drawVerts[0][0], drawVerts[0][1]);
+      for (let i = 1; i < drawVerts.length; i++) ctx.lineTo(drawVerts[i][0], drawVerts[i][1]);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 선
+    ctx.strokeStyle = '#D4952B';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(drawVerts[0][0], drawVerts[0][1]);
+    for (let i = 1; i < drawVerts.length; i++) ctx.lineTo(drawVerts[i][0], drawVerts[i][1]);
+    if (drawVerts.length >= 3) ctx.closePath();
+    ctx.stroke();
+
+    // 꼭짓점
+    ctx.fillStyle = '#F0D090';
+    for (const [x, y] of drawVerts) {
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 첫 꼭짓점 강조 (닫기 가이드)
+    ctx.fillStyle = '#E04040';
+    ctx.beginPath();
+    ctx.arc(drawVerts[0][0], drawVerts[0][1], 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── 드로우 스크린 열기/닫기 ──
+  function openDrawScreen() {
+    document.getElementById('menu-screen').style.display = 'none';
+    document.getElementById('draw-screen').style.display = 'block';
+    drawVerts = [];
+    renderDrawCanvas();
+  }
+
+  function closeDrawScreen() {
+    document.getElementById('draw-screen').style.display = 'none';
+    document.getElementById('menu-screen').style.display = 'block';
+  }
+
+  // ── 완료 처리 ──
+  function finishDrawing() {
+    if (drawVerts.length < 3) return;
+    const gameVerts = drawVerts.map(([x, y]) => [x * 2, y * 2]);
+    Shapes.defs.custom = {
+      name: '커스텀', icon: '✏️',
+      sdf(x, y) { return Shapes.sdPolygon(x, y, gameVerts); }
+    };
+    Game.setShape('custom');
+    closeDrawScreen();
+    buildShapeSelector();
+    Shapes.invalidateCache();
+    Grid.init('custom');
+    Renderer.renderBase();
+    Renderer.resetCrackLayer();
+  }
+
+  // ── 캔버스 초기화 ──
   const canvasSlot = document.getElementById('canvas-slot');
   Renderer.init(canvasSlot);
 
-  // 모양 선택 UI
   buildShapeSelector();
 
-  // 초기 미리보기
   Shapes.invalidateCache();
   Grid.init(Game.getShape());
   Renderer.renderBase();
   Renderer.resetCrackLayer();
 
-  // 입력 바인딩
   Input.init();
 
-  // 버튼 이벤트
   document.getElementById('start-btn').onclick = Game.start;
   document.getElementById('retry-btn').onclick = Game.showMenu;
   document.getElementById('lick-btn').onclick = Game.startLick;
+
+  // ── 드로우 캔버스 클릭 ──
+  document.getElementById('draw-canvas').addEventListener('click', (e) => {
+    const canvas = document.getElementById('draw-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (300 / rect.width);
+    const y = (e.clientY - rect.top)  * (300 / rect.height);
+    // 첫 점 근처 클릭 → 완료
+    if (drawVerts.length >= 3) {
+      const dx = x - drawVerts[0][0], dy = y - drawVerts[0][1];
+      if (dx * dx + dy * dy < 12 * 12) { finishDrawing(); return; }
+    }
+    drawVerts.push([x, y]);
+    renderDrawCanvas();
+  });
+
+  document.getElementById('draw-done-btn').onclick = finishDrawing;
+  document.getElementById('draw-clear-btn').onclick = () => { drawVerts = []; renderDrawCanvas(); };
+  document.getElementById('draw-back-btn').onclick = closeDrawScreen;
 })();

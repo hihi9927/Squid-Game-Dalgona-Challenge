@@ -180,5 +180,5 @@ const Shapes = (() => {
     }
   }
 
-  return { defs, invalidateCache };
+  return { defs, invalidateCache, sdPolygon };
 })();

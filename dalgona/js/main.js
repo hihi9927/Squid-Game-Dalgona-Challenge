@@ -3,8 +3,8 @@
 // ============================================================
 
 (function () {
-  let drawVerts = [];
-  let isMouseDown = false;
+  let strokes = [];        // 완성된 스트로크들
+  let currentStroke = null; // 현재 그리는 중인 스트로크
 
   // ── 모양 선택 버튼 생성 ──
   function buildShapeSelector() {
@@ -40,7 +40,7 @@
     ctx.clearRect(0, 0, 300, 300);
 
     // 쿠키 원 가이드
-    ctx.strokeStyle = 'rgba(212,149,43,0.4)';
+    ctx.strokeStyle = 'rgba(212,149,43,0.35)';
     ctx.setLineDash([5, 4]);
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -48,33 +48,18 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    if (drawVerts.length === 0) return;
-
-    // 채우기 프리뷰
-    if (drawVerts.length >= 3) {
-      ctx.fillStyle = 'rgba(212,149,43,0.18)';
-      ctx.beginPath();
-      ctx.moveTo(drawVerts[0][0], drawVerts[0][1]);
-      for (let i = 1; i < drawVerts.length; i++) ctx.lineTo(drawVerts[i][0], drawVerts[i][1]);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // 선
     ctx.strokeStyle = '#D4952B';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(drawVerts[0][0], drawVerts[0][1]);
-    for (let i = 1; i < drawVerts.length; i++) ctx.lineTo(drawVerts[i][0], drawVerts[i][1]);
-    if (drawVerts.length >= 3) ctx.closePath();
-    ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    // 꼭짓점
-    ctx.fillStyle = '#F0D090';
-    for (const [x, y] of drawVerts) {
+    const all = currentStroke ? [...strokes, currentStroke] : strokes;
+    for (const s of all) {
+      if (s.length < 2) continue;
       ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(s[0][0], s[0][1]);
+      for (let i = 1; i < s.length; i++) ctx.lineTo(s[i][0], s[i][1]);
+      ctx.stroke();
     }
   }
 
@@ -82,7 +67,8 @@
   function openDrawScreen() {
     document.getElementById('menu-screen').style.display = 'none';
     document.getElementById('draw-screen').style.display = 'block';
-    drawVerts = [];
+    strokes = [];
+    currentStroke = null;
     renderDrawCanvas();
   }
 
@@ -93,16 +79,38 @@
 
   // ── 완료 처리 ──
   function finishDrawing() {
-    if (drawVerts.length < 3) return;
-    const gameVerts = drawVerts.map(([x, y]) => [x * 2, y * 2]);
-    Shapes.defs.custom = {
-      name: '커스텀', icon: '✏️',
-      sdf(x, y) { return Shapes.sdPolygon(x, y, gameVerts); }
-    };
+    const all = currentStroke ? [...strokes, currentStroke] : strokes;
+    if (all.length === 0) return;
+
+    const N = CFG.GRID;
+    const outlineSet = new Set();
+    const brushR = 3;
+
+    for (const stroke of all) {
+      for (let i = 0; i < stroke.length - 1; i++) {
+        const x0 = stroke[i][0] * 2,   y0 = stroke[i][1] * 2;
+        const x1 = stroke[i+1][0] * 2, y1 = stroke[i+1][1] * 2;
+        const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+        for (let s = 0; s <= steps; s++) {
+          const px = Math.round(x0 + (x1 - x0) * s / steps);
+          const py = Math.round(y0 + (y1 - y0) * s / steps);
+          for (let dy = -brushR; dy <= brushR; dy++) {
+            for (let dx = -brushR; dx <= brushR; dx++) {
+              if (dx*dx + dy*dy > brushR*brushR) continue;
+              const gx = px + dx, gy = py + dy;
+              if (gx >= 0 && gx < N && gy >= 0 && gy < N)
+                outlineSet.add(gy * N + gx);
+            }
+          }
+        }
+      }
+    }
+
+    Grid.setCustomOutline(outlineSet);
+    Shapes.defs.custom = { name: '커스텀', icon: '✏️', sdf: () => 1 };
     Game.setShape('custom');
     closeDrawScreen();
     buildShapeSelector();
-    Shapes.invalidateCache();
     Grid.init('custom');
     Renderer.renderBase();
     Renderer.resetCrackLayer();
@@ -139,30 +147,30 @@
 
   function onDrawStart(e) {
     e.preventDefault();
-    isMouseDown = true;
-    drawVerts = [];
+    currentStroke = [];
     const [x, y] = getCanvasPos(e);
-    drawVerts.push([x, y]);
+    currentStroke.push([x, y]);
     renderDrawCanvas();
   }
 
   function onDrawMove(e) {
     e.preventDefault();
-    if (!isMouseDown) return;
+    if (!currentStroke) return;
     const [x, y] = getCanvasPos(e);
-    const last = drawVerts[drawVerts.length - 1];
+    const last = currentStroke[currentStroke.length - 1];
     const dx = x - last[0], dy = y - last[1];
-    if (dx * dx + dy * dy >= 6 * 6) {
-      drawVerts.push([x, y]);
+    if (dx * dx + dy * dy >= 4 * 4) {
+      currentStroke.push([x, y]);
       renderDrawCanvas();
     }
   }
 
   function onDrawEnd(e) {
     e.preventDefault();
-    if (!isMouseDown) return;
-    isMouseDown = false;
-    if (drawVerts.length >= 3) finishDrawing();
+    if (!currentStroke) return;
+    if (currentStroke.length >= 2) strokes.push(currentStroke);
+    currentStroke = null;
+    renderDrawCanvas();
   }
 
   drawCanvas.addEventListener('mousedown',  onDrawStart);
@@ -173,6 +181,6 @@
   drawCanvas.addEventListener('touchend',   onDrawEnd,   { passive: false });
 
   document.getElementById('draw-done-btn').onclick = finishDrawing;
-  document.getElementById('draw-clear-btn').onclick = () => { drawVerts = []; renderDrawCanvas(); };
+  document.getElementById('draw-clear-btn').onclick = () => { strokes = []; currentStroke = null; renderDrawCanvas(); };
   document.getElementById('draw-back-btn').onclick = closeDrawScreen;
 })();

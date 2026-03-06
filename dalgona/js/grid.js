@@ -240,10 +240,103 @@ const Grid = (() => {
     return { hp, maxHp, type, crackLevel, broken, inCookie, noiseVal };
   }
 
+  // ── 커스텀 드로잉 모드 ──
+  let customOutlineSet = null;
+  function setCustomOutline(set) { customOutlineSet = set; }
+
+  function initCustom() {
+    const N = CFG.GRID;
+    const total = N * N;
+    const center = CFG.CENTER;
+    const radius = CFG.COOKIE_RADIUS;
+    const radiusSq = radius * radius;
+    const perlin = new PerlinNoise(Date.now());
+    const noiseScale = 0.2;
+
+    hp         = new Int8Array(total);
+    maxHp      = new Int8Array(total);
+    type       = new Uint8Array(total);
+    crackLevel = new Uint8Array(total);
+    broken     = new Uint8Array(total);
+    inCookie   = new Uint8Array(total);
+    noiseVal   = new Float32Array(total);
+    stats = { totalOutline: 0, brokenOutline: 0, totalInside: 0, brokenInside: 0 };
+
+    // 1단계: inCookie 설정 + 윤곽선 표시 + 나머지 INSIDE로 임시 지정
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const i = idx(x, y);
+        const dx = x - center, dy = y - center;
+        const cookie = (dx * dx + dy * dy) <= radiusSq;
+        inCookie[i] = cookie ? 1 : 0;
+        noiseVal[i] = Math.random() * 0.15;
+
+        if (cookie) {
+          if (customOutlineSet.has(i)) {
+            type[i] = TYPE_OUTLINE;
+            hp[i] = CFG.OUTLINE_HP_INIT;
+            maxHp[i] = CFG.OUTLINE_HP_INIT;
+            stats.totalOutline++;
+          } else {
+            type[i] = TYPE_INSIDE; // 임시 — flood fill로 보정
+            const n = perlin.fbm(x * noiseScale, y * noiseScale, 6, 0.9);
+            const h = Math.max(1, Math.min(127, ((n * 25 + 45) | 0)));
+            hp[i] = h; maxHp[i] = h;
+            stats.totalInside++;
+          }
+        }
+      }
+    }
+
+    // 2단계: 쿠키 경계에서 BFS → 윤곽선 안 통과하고 닿는 셀 = TYPE_OUTSIDE
+    const queue = [];
+    const visited = new Uint8Array(total);
+
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const i = idx(x, y);
+        if (!inCookie[i] || type[i] === TYPE_OUTLINE) continue;
+        const onEdge =
+          (x > 0   && !inCookie[idx(x-1, y)]) ||
+          (x < N-1 && !inCookie[idx(x+1, y)]) ||
+          (y > 0   && !inCookie[idx(x, y-1)]) ||
+          (y < N-1 && !inCookie[idx(x, y+1)]);
+        if (onEdge && !visited[i]) {
+          visited[i] = 1;
+          type[i] = TYPE_OUTSIDE;
+          stats.totalInside--;
+          queue.push(i);
+        }
+      }
+    }
+
+    let head = 0;
+    while (head < queue.length) {
+      const cur = queue[head++];
+      const cx = cur % N, cy = (cur / N) | 0;
+      for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = cx + ddx, ny = cy + ddy;
+        if (nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+        const ni = idx(nx, ny);
+        if (!inCookie[ni] || visited[ni] || type[ni] === TYPE_OUTLINE) continue;
+        visited[ni] = 1;
+        type[ni] = TYPE_OUTSIDE;
+        stats.totalInside--;
+        queue.push(ni);
+      }
+    }
+  }
+
+  const _initOrig = init;
+  function initDispatch(shapeName) {
+    if (shapeName === 'custom' && customOutlineSet) { initCustom(); return; }
+    _initOrig(shapeName);
+  }
+
   return {
     TYPE_OUTSIDE, TYPE_OUTLINE, TYPE_INSIDE,
-    init, get, getHp, setHp, getType, getCrack, addCrack,
+    init: initDispatch, get, getHp, setHp, getType, getCrack, addCrack,
     isBroken, setBroken, isInCookie, getNoise, arrays, idx,
-    stats: () => stats,
+    stats: () => stats, setCustomOutline,
   };
 })();

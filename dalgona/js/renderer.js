@@ -15,6 +15,10 @@ const Renderer = (() => {
   let mouseX = 0, mouseY = 0;
   let running = false;
 
+  // 혀 이미지 (핥기 커서)
+  const tongueImg = new Image();
+  tongueImg.src = '../혀.png';
+
   // ---- 색상 유틸 ----
   // Uint32: 0xAABBGGRR (little-endian)
   function rgba(r, g, b, a) {
@@ -171,16 +175,19 @@ const Renderer = (() => {
       const px0 = gx * C, py0 = gy * C;
 
       if (arr.broken[i]) {
-        // 구멍 — 어두운 색
+        // 구멍 — 거의 검정
         for (let dy = 0; dy < C; dy++) {
           const rowStart = (py0 + dy) * size + px0;
           for (let dx = 0; dx < C; dx++) {
-            // 상단/좌측 가장자리를 더 어둡게 (깊이감)
-            if (dy === 0 || dx === 0) {
-              crackBuf[rowStart + dx] = rgba(40, 25, 10, 240);
-            } else {
-              crackBuf[rowStart + dx] = rgba(55, 33, 14, 220);
-            }
+            crackBuf[rowStart + dx] = rgba(10, 5, 2, 255);
+          }
+        }
+      } else if (arr.hp[i] >= arr.maxHp[i]) {
+        // 복구된 셀 — 투명으로 초기화
+        for (let dy = 0; dy < C; dy++) {
+          const rowStart = (py0 + dy) * size + px0;
+          for (let dx = 0; dx < C; dx++) {
+            crackBuf[rowStart + dx] = COL_TRANSPARENT;
           }
         }
       } else if (arr.hp[i] < arr.maxHp[i]) {
@@ -220,6 +227,14 @@ const Renderer = (() => {
     // 파티클
     Particles.update();
     Particles.draw(uiCtx);
+
+    // 혀 커서 (핥기 모드)
+    if (gameState === 'licking') {
+      const cx = mouseX, cy = mouseY;
+      if (tongueImg.complete && tongueImg.naturalWidth > 0) {
+        uiCtx.drawImage(tongueImg, cx - 48, cy - 48, 96, 96);
+      }
+    }
 
     // 핀 커서
     if (gameState === 'playing') {

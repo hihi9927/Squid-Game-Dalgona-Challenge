@@ -44,12 +44,37 @@ class Queue {
 
 const Crack = (() => {
   const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  let crackling = false;
 
   let dirtyCells = new Set();
+  let lickableCells = new Set();  // 핥기로 복구 가능한 셀 인덱스
 
   function getDirty()  { return dirtyCells; }
   function clearDirty() { dirtyCells = new Set(); }
+  function clearLickable() { lickableCells = new Set(); }
   function markDirty(x, y) { dirtyCells.add(y * CFG.GRID + x); }
+
+  // ── 핥기: 반경 r 내 균열 셀 복구 ──
+  function healAt(px, py, r) {
+    if (lickableCells.size === 0) return;
+    const arr = Grid.arrays();
+    const rSq = r * r;
+    for (const key of [...lickableCells]) {
+      const x = key % N;
+      const y = Math.floor(key / N);
+      const dx = x - px, dy = y - py;
+      if (dx * dx + dy * dy <= rSq) {
+        arr.broken[key] = 0;
+        arr.hp[key] = arr.maxHp[key];
+        markDirty(x, y);
+        lickableCells.delete(key);
+        const stats = Grid.stats();
+        if (arr.type[key] === Grid.TYPE_INSIDE)  stats.brokenInside  = Math.max(0, stats.brokenInside  - 1);
+        if (arr.type[key] === Grid.TYPE_OUTLINE) stats.brokenOutline = Math.max(0, stats.brokenOutline - 1);
+      }
+    }
+    if (lickableCells.size === 0) Game.endLick();
+  }
 
   // ── 셀 파괴 ──
   function breakCell(x, y) {
@@ -69,8 +94,10 @@ const Crack = (() => {
       5, '#D4952B'
     );
 
-    const intensity = t === Grid.TYPE_OUTLINE ? 0.8 : 1.8;
-    Renderer.shake(intensity);
+    if (!crackling) {
+      const intensity = t === Grid.TYPE_OUTLINE ? 0.8 : 1.8;
+      Renderer.shake(intensity);
+    }
   }
 
   // ── 셀 타입에 따른 투과율 ──
@@ -164,14 +191,15 @@ const Crack = (() => {
       Grid.setBroken(x, y);
       markDirty(x, y);
 
-      Particles.spawn(
-        x * CFG.CELL + CFG.CELL / 2,
-        y * CFG.CELL + CFG.CELL / 2,
-        3, '#D4952B'
-      );
-
-      const intensity = Grid.TYPE_OUTLINE === t ? 0.8 : 1.1;
-      Renderer.shake(intensity);
+      if (!crackling) {
+        Particles.spawn(
+          x * CFG.CELL + CFG.CELL / 2,
+          y * CFG.CELL + CFG.CELL / 2,
+          3, '#D4952B'
+        );
+        const intensity = Grid.TYPE_OUTLINE === t ? 0.8 : 1.1;
+        Renderer.shake(intensity);
+      }
       return true;
     }
   }
@@ -357,7 +385,6 @@ const Crack = (() => {
 
       if (Grid.isBroken(currX, currY)) {
         if (currHp >= 40) {
-          if (Math.random() < 0.15) propagateCrack(currX, currY, originX, originY);
           continue;
           // let i = 0, ddx = 0, ddy = 0;
           // for (const [dx, dy] of NEIGHBOR_DIRECTION) {
@@ -452,6 +479,162 @@ const Crack = (() => {
   // ──────────────────────────────────────────────────────────────────────────────
 
 
+  // ── 내부 클릭 시 달고나를 두 조각으로 갈라냄 (미드포인트 변위) ──
+  function applyInsideCrack(gx, gy) {
+    const N = CFG.GRID;
+    const radius = CFG.COOKIE_RADIUS;
+    const arr = Grid.arrays();
+
+    /* PCA 방식 — 주석처리
+    let bxSum = 0, bySum = 0, bCount = 0;
+    ... (PCA 로직) ...
+    */
+
+    // ── 가장 가까운 파괴된 윤곽선 점 기반 균열 방향 결정 ──
+    // 1. 파괴된 윤곽선 셀 수집
+    const brokenPts = [];
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const i = Grid.idx(x, y);
+        if (arr.broken[i] && arr.type[i] === Grid.TYPE_OUTLINE) {
+          brokenPts.push([x, y]);
+        }
+      }
+    }
+
+    let startX, startY, endX, endY, normX, normY;
+
+    if (brokenPts.length >= 3) {
+      // 2. 클릭 위치에서 가장 가까운 파괴 셀까지 거리 d_min 계산
+      let minDist = Infinity;
+      for (const [x, y] of brokenPts) {
+        const d = Math.hypot(x - gx, y - gy);
+        if (d < minDist) minDist = d;
+      }
+
+      // 3. d_min ±20% 범위 내 후보 필터링 후 랜덤 선택
+      const lo = minDist * 0.8, hi = minDist * 1.2;
+      const candidates = brokenPts.filter(([x, y]) => {
+        const d = Math.hypot(x - gx, y - gy);
+        return d >= lo && d <= hi;
+      });
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+
+      // 4. 선택된 점이 한쪽 끝, 반대 방향으로 같은 거리만큼 반대 끝
+      startX = chosen[0];
+      startY = chosen[1];
+      const dx = gx - chosen[0], dy = gy - chosen[1];
+      const dist = Math.hypot(dx, dy) || 1;
+      const ndx = dx / dist, ndy = dy / dist;
+      endX = gx + ndx * dist;
+      endY = gy + ndy * dist;
+
+      // 균열 수직 방향 (변위용)
+      normX = -ndy;
+      normY =  ndx;
+    } else {
+      // 파괴된 윤곽선 없으면 → 전체 윤곽선 셀 대상으로 동일 로직
+      const outlinePts = [];
+      for (let y = 0; y < N; y++) {
+        for (let x = 0; x < N; x++) {
+          const i = Grid.idx(x, y);
+          if (arr.type[i] === Grid.TYPE_OUTLINE) {
+            outlinePts.push([x, y]);
+          }
+        }
+      }
+
+      let minDist = Infinity;
+      for (const [x, y] of outlinePts) {
+        const d = Math.hypot(x - gx, y - gy);
+        if (d < minDist) minDist = d;
+      }
+
+      const lo = minDist * 0.8, hi = minDist * 1.2;
+      const candidates = outlinePts.filter(([x, y]) => {
+        const d = Math.hypot(x - gx, y - gy);
+        return d >= lo && d <= hi;
+      });
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+
+      startX = chosen[0];
+      startY = chosen[1];
+      const dx = gx - chosen[0], dy = gy - chosen[1];
+      const dist = Math.hypot(dx, dy) || 1;
+      const ndx = dx / dist, ndy = dy / dist;
+      endX = gx + ndx * dist;
+      endY = gy + ndy * dist;
+
+      normX = -ndy;
+      normY =  ndx;
+    }
+
+    // 최소 균열 길이 보장 — 짧으면 반대쪽(endX/endY)을 더 늘림
+    const MIN_CRACK_LEN = 20;
+    const crackDx = endX - startX, crackDy = endY - startY;
+    const crackLen = Math.hypot(crackDx, crackDy);
+    if (crackLen < MIN_CRACK_LEN) {
+      const extra = MIN_CRACK_LEN - crackLen;
+      const crackNdx = crackDx / (crackLen || 1);
+      const crackNdy = crackDy / (crackLen || 1);
+      endX += crackNdx * extra;
+      endY += crackNdy * extra;
+    }
+
+    // 미드포인트 변위로 자연스러운 균열 경로 생성
+    // 클릭 위치(gx,gy)를 중간 앵커로 고정해서 반드시 지나가게 함
+    function subdivide(pts, depth, rough) {
+      if (depth === 0 || rough < 0.5) return pts;
+      const result = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        result.push(pts[i]);
+        const disp = (Math.random() - 0.5) * rough;
+        const mx = (pts[i][0] + pts[i+1][0]) / 2 + normX * disp;
+        const my = (pts[i][1] + pts[i+1][1]) / 2 + normY * disp;
+        result.push([mx, my]);
+      }
+      result.push(pts[pts.length - 1]);
+      return subdivide(result, depth - 1, rough * 0.58);
+    }
+
+    const roughness = radius * 0.10;
+    // [파괴된 끝점, 클릭점, 반대 끝점] — 클릭점이 반드시 경로 위에 포함됨
+    const crackPath = subdivide([[startX, startY], [gx, gy], [endX, endY]], 6, roughness);
+
+    // 경로를 따라 픽셀 파괴
+    const halfWidth = 2;
+    for (let i = 0; i < crackPath.length - 1; i++) {
+      const x0 = crackPath[i][0],   y0 = crackPath[i][1];
+      const x1 = crackPath[i+1][0], y1 = crackPath[i+1][1];
+
+      // 두 점 사이를 보간하며 픽셀 단위 파괴
+      const segLen = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+      const segDirX = (x1 - x0) / segLen;
+      const segDirY = (y1 - y0) / segLen;
+      // 이 세그먼트의 수직 방향
+      const segNX = -segDirY;
+      const segNY =  segDirX;
+
+      for (let s = 0; s <= Math.ceil(segLen); s++) {
+        const px = x0 + segDirX * s;
+        const py = y0 + segDirY * s;
+
+        for (let w = -halfWidth; w <= halfWidth; w++) {
+          const wx = Math.round(px + segNX * w);
+          const wy = Math.round(py + segNY * w);
+          if (wx < 0 || wx >= N || wy < 0 || wy >= N) continue;
+          if (!Grid.isInCookie(wx, wy)) continue;
+          giveDamage(wx, wy, 100);
+          // 파괴된 셀이면 핥기 복구 목록에 추가
+          if (Grid.isBroken(wx, wy)) lickableCells.add(wy * N + wx);
+          markDirty(wx, wy);
+        }
+      }
+    }
+
+    setTimeout(() => { crackling = false; Game.offerLick(); }, 1200);
+  }
+
   // ── 클릭 처리 ──
   function applyClick(gx, gy) {
     const N = CFG.GRID;
@@ -459,6 +642,14 @@ const Crack = (() => {
     if (!Grid.isInCookie(gx, gy) || Grid.isBroken(gx, gy)) return;
 
     Audio.click();
+
+    // 내부 셀 클릭 시 즉시 파괴 균열
+    if (crackling) return;
+    if (Grid.getType(gx, gy) === Grid.TYPE_INSIDE) {
+      crackling = true;
+      applyInsideCrack(gx, gy);
+      return;
+    }
 
     propagateDamage(gx, gy);
 
@@ -487,5 +678,5 @@ const Crack = (() => {
     */
   }
 
-  return { applyClick, getDirty, clearDirty };
+  return { applyClick, getDirty, clearDirty, clearLickable, healAt };
 })();

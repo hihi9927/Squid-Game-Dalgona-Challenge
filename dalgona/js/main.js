@@ -44,4 +44,5 @@
   // 버튼 이벤트
   document.getElementById('start-btn').onclick = Game.start;
   document.getElementById('retry-btn').onclick = Game.showMenu;
+  document.getElementById('lick-btn').onclick = Game.startLick;
 })();

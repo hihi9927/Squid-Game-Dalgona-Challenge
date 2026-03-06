@@ -10,20 +10,28 @@ const Input = (() => {
       const rect = canvas.getBoundingClientRect();
       const sx = canvas.width / rect.width;
       const sy = canvas.height / rect.height;
-      Renderer.setMouse(
-        (e.clientX - rect.left) * sx,
-        (e.clientY - rect.top) * sy
-      );
+      const cx = (e.clientX - rect.left) * sx;
+      const cy = (e.clientY - rect.top) * sy;
+      Renderer.setMouse(cx, cy);
+      // 핥기 모드: 드래그 중 복구
+      if (Game.getState() === 'licking' && e.buttons === 1) {
+        Crack.healAt(Math.floor(cx / CFG.CELL), Math.floor(cy / CFG.CELL), 20);
+      }
     });
 
     canvas.addEventListener('mousedown', (e) => {
-      if (Game.getState() !== 'playing') return;
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
       const sx = canvas.width / rect.width;
       const sy = canvas.height / rect.height;
       const cx = (e.clientX - rect.left) * sx;
       const cy = (e.clientY - rect.top) * sy;
+      // 핥기 모드
+      if (Game.getState() === 'licking') {
+        Crack.healAt(Math.floor(cx / CFG.CELL), Math.floor(cy / CFG.CELL), 20);
+        return;
+      }
+      if (Game.getState() !== 'playing') return;
       handleClick(cx, cy);
     });
 

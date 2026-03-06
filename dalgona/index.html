@@ -116,6 +116,16 @@
 
   /* ── 결과 화면 ── */
   .result-text { font-size: 48px; margin-bottom: 12px; }
+
+  /* ── 핥기 오버레이 ── */
+  #lick-overlay {
+    display: none;
+    position: absolute;
+    left: 50%; bottom: 22%;
+    transform: translateX(-50%);
+    z-index: 15;
+    text-align: center;
+  }
 </style>
 </head>
 <body>
@@ -133,6 +143,11 @@
 
   <div id="canvas-container">
     <div id="canvas-slot"></div>
+
+    <!-- 핥기 버튼 오버레이 — 캔버스 중간 하단 -->
+    <div id="lick-overlay">
+      <button class="btn" id="lick-btn" style="font-size:18px; padding:14px 36px;">👅 핥아서 메꾸기</button>
+    </div>
 
     <div id="overlay">
       <div id="menu-screen">

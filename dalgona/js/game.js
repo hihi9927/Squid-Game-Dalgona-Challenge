@@ -3,10 +3,13 @@
 // ============================================================
 
 const Game = (() => {
-  let state = 'menu';   // menu | playing | win | lose
+  let state = 'menu';   // menu | playing | licking | win | lose
   let timeLeft = CFG.TIME_LIMIT;
   let timerHandle = null;
   let selectedShape = 'star';
+  let lickUsed = false;
+
+  const $lickOverlay = () => document.getElementById('lick-overlay');
 
   // DOM refs
   const $timer     = () => document.getElementById('timer');
@@ -39,6 +42,7 @@ const Game = (() => {
   }
 
   function checkConditions() {
+    if (state !== 'playing') return;
     updateHUD();
     const stats = Grid.stats();
 
@@ -49,13 +53,42 @@ const Game = (() => {
     }
     // 승리: 윤곽선 충분히 파괴
     if (stats.brokenOutline >= stats.totalOutline * CFG.WIN_OUTLINE_RATIO) {
-      endGame('win');
+      state = 'win';
+      clearInterval(timerHandle);
+      setTimeout(() => endGame('win'), 1500);
     }
+  }
+
+  // ── 핥기 기회 제공 (균열 발생 후 1회만) ──
+  function offerLick() {
+    if (lickUsed) { endGame('lose'); return; }
+    state = 'licking_offer';   // 게임 입력 차단
+    clearInterval(timerHandle);
+    $lickOverlay().style.display = 'block';
+  }
+
+  function startLick() {
+    lickUsed = true;
+    state = 'licking';
+    $lickOverlay().style.display = 'none';
+  }
+
+  function endLick() {
+    state = 'playing';
+    // 타이머 재개
+    timerHandle = setInterval(() => {
+      timeLeft--;
+      $timer().textContent = timeLeft;
+      if (timeLeft <= 15) $timerWrap().classList.add('warning');
+      if (timeLeft <= 0) endGame('lose');
+    }, 1000);
   }
 
   function start() {
     Audio.init();
     state = 'playing';
+    lickUsed = false;
+    $lickOverlay().style.display = 'none';
     timeLeft = CFG.TIME_LIMIT;
     Particles.clear();
 
@@ -64,6 +97,7 @@ const Game = (() => {
     Renderer.renderBase();
     Renderer.resetCrackLayer();
     Crack.clearDirty();
+    Crack.clearLickable();
 
     $overlay().classList.add('hidden');
     $timerWrap().classList.remove('warning');
@@ -126,5 +160,5 @@ const Game = (() => {
     Renderer.resetCrackLayer();
   }
 
-  return { getState, getShape, setShape, start, endGame, showMenu, checkConditions };
+  return { getState, getShape, setShape, start, endGame, showMenu, checkConditions, offerLick, startLick, endLick };
 })();

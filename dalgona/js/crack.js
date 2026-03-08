@@ -672,8 +672,8 @@ const Crack = (() => {
     if (Grid.getType(gx, gy) === Grid.TYPE_INSIDE) {
       const arr = Grid.arrays();
       let nearOx = -1, nearOy = -1, nearDist = Infinity;
-      for (let dy = -3; dy <= 3; dy++) {
-        for (let dx = -3; dx <= 3; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
           const nx = gx + dx, ny = gy + dy;
           if (nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
           const ni = ny * N + nx;

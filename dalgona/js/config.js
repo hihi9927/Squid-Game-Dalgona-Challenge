@@ -47,7 +47,7 @@ const CFG = {
   CLICK_IMPACT_OTHER_PROB: 0.80,    // 충격파 범위 내 비윤곽선 셀 적중 확률
 
   // 승리/패배 조건
-  WIN_OUTLINE_RATIO: 0.98,
+  WIN_OUTLINE_RATIO: 0.99,
   LOSE_INSIDE_RATIO: 0.18,
 
   // ──────────────────────────────────────────────────────────────────────────────

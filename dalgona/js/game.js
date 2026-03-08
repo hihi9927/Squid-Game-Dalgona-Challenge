@@ -8,6 +8,7 @@ const Game = (() => {
   let timerHandle = null;
   let selectedShape = 'star';
   let lickUsed = false;
+  let startTime = 0;
 
   const $lickOverlay = () => document.getElementById('lick-overlay');
 
@@ -98,6 +99,7 @@ const Game = (() => {
     $timer().textContent = timeLeft;
     $progress().style.width = '0%';
 
+    startTime = performance.now();
     clearInterval(timerHandle);
     timerHandle = setInterval(() => {
       timeLeft--;
@@ -125,7 +127,8 @@ const Game = (() => {
         Audio.win();
         $resEmoji().textContent = '🎉';
         $resTitle().textContent = '성공!';
-        $resSub().textContent = `${CFG.TIME_LIMIT - timeLeft}초 만에 뽑기 성공!`;
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+        $resSub().textContent = `${elapsed}초 만에 뽑기 성공!`;
       } else {
         Audio.lose();
         $resEmoji().textContent = '💔';
